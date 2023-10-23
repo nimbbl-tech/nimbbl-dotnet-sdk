@@ -1,0 +1,46 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <TargetFramework>net6.0</TargetFramework>
+        <Nullable>enable</Nullable>
+        <IsPackable>false</IsPackable>
+    </PropertyGroup>
+    <ItemGroup>
+        <PackageReference Include="Microsoft.NET.Test.Sdk" Version="16.11.0" />
+        <PackageReference Include="xunit" Version="2.4.1" />
+        <PackageReference Include="xunit.runner.visualstudio" Version="2.4.3">
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+            <PrivateAssets>all</PrivateAssets>
+        </PackageReference>
+        <PackageReference Include="coverlet.collector" Version="3.1.0">
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+            <PrivateAssets>all</PrivateAssets>
+        </PackageReference>
+    </ItemGroup>
+    <ItemGroup>
+        <ProjectReference Include="..\Nimbbl.Sdk.Rest\Nimbbl.Sdk.Rest.csproj" />
+    </ItemGroup>
+    <ItemGroup>
+      <Content Include="obj\Debug\net6.0\Nimbbl.Sdk.Rest.Test.AssemblyInfoInputs.cache" />
+      <Content Include="obj\Debug\net6.0\Nimbbl.Sdk.Rest.Test.assets.cache" />
+      <Content Include="obj\Debug\net6.0\Nimbbl.Sdk.Rest.Test.csproj.AssemblyReference.cache" />
+      <Content Include="obj\Debug\net6.0\Nimbbl.Sdk.Rest.Test.csproj.CopyComplete" />
+      <Content Include="obj\Debug\net6.0\Nimbbl.Sdk.Rest.Test.csproj.CoreCompileInputs.cache" />
+      <Content Include="obj\Debug\net6.0\Nimbbl.Sdk.Rest.Test.csproj.FileListAbsolute.txt" />
+      <Content Include="obj\Debug\net6.0\Nimbbl.Sdk.Rest.Test.dll" />
+      <Content Include="obj\Debug\net6.0\Nimbbl.Sdk.Rest.Test.GeneratedMSBuildEditorConfig.editorconfig" />
+      <Content Include="obj\Debug\net6.0\Nimbbl.Sdk.Rest.Test.genruntimeconfig.cache" />
+      <Content Include="obj\Debug\net6.0\Nimbbl.Sdk.Rest.Test.pdb" />
+      <Content Include="obj\Debug\net6.0\ref\Nimbbl.Sdk.Rest.Test.dll" />
+      <Content Include="obj\Nimbbl.Sdk.Rest.Test.csproj.nuget.dgspec.json" />
+      <Content Include="obj\Nimbbl.Sdk.Rest.Test.csproj.nuget.g.props" />
+      <Content Include="obj\Nimbbl.Sdk.Rest.Test.csproj.nuget.g.targets" />
+      <Content Include="obj\project.assets.json" />
+      <Content Include="obj\project.nuget.cache" />
+      <Content Include="obj\project.packagespec.json" />
+      <Content Include="obj\rider.project.restore.info" />
+    </ItemGroup>
+    <ItemGroup>
+      <Compile Include="obj\Debug\net6.0\.NETCoreApp,Version=v6.0.AssemblyAttributes.cs" />
+      <Compile Include="obj\Debug\net6.0\Nimbbl.Sdk.Rest.Test.AssemblyInfo.cs" />
+    </ItemGroup>
+</Project>

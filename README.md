@@ -1,29 +1,64 @@
-# README #
+# nimbbl-dotnet-sdk
 
-This README would normally document whatever steps are necessary to get your application up and running.
+SDK for dotnet web API applications.
 
-### What is this repository for? ###
+## Working with project
 
-* Quick summary
-* Version
-* [Learn Markdown](https://bitbucket.org/tutorials/markdowndemo)
+### Build
 
-### How do I get set up? ###
+```
+dotnet build 
+```
 
-* Summary of set up
-* Configuration
-* Dependencies
-* Database configuration
-* How to run tests
-* Deployment instructions
+### Test
 
-### Contribution guidelines ###
+```
+dotnet test
+```
 
-* Writing tests
-* Code review
-* Other guidelines
+### Generate assembly package
 
-### Who do I talk to? ###
+```
+dotnet pack
+```
 
-* Repo owner or admin
-* Other community or team contact
+## Integration
+
+### Adding reference to the SDK
+
+#### Through Assembly reference
+
+- Generate the assembly by going through the previous steps
+- Add the assembly as reference into the current project.
+  ```xml
+  <ItemGroup>
+      <Reference Include="Nimbbl.Sdk.Rest">
+         <HintPath>path\to\Nimbbl.Sdk.Rest.dll</HintPath>
+      </Reference>
+  </ItemGroup>
+  ```
+- Build the project
+
+#### Through Project reference
+
+- Add a reference to the `nimbbl sdk` csproj in your current project.
+  ```xml
+  <ItemGroup>
+      <ProjectReference Include="path\to\Nimbbl.Sdk.Rest\Nimbbl.Sdk.Rest.csproj" />
+  </ItemGroup>
+  ```
+- Build the project
+
+### Instantiating the `NimbbleClient`
+
+- Add following code to the Startup logic.
+  ```c#
+  var nimbbl = await NimbblClient.CreateAsync()
+  ```
+
+### Creating the order
+
+```c#
+var orders = (await NimbblClient.CreateAsync()).Orders
+var order= orders.CreateAsync(orderRequest);
+```
