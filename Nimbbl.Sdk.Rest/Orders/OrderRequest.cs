@@ -2,6 +2,8 @@ namespace Nimbbl.Sdk.Rest;
 
 public class OrderRequest
 {
+    public string? CallbackMode { get; init; }
+    public string? CallbackUrl { get; init; }
     public string InvoiceId { get; init; }
     public DateTime OrderDate { get; init; }
     public string Currency { get; init; }
