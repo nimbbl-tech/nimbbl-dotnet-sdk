@@ -1,28 +1,22 @@
+using System.Text.Json;
+using Nimbbl.Sdk.Rest.Common;
 using Nimbbl.Sdk.Rest.RestClient;
 namespace Nimbbl.Sdk.Rest;
 
-public interface ITransactions
+public class Transactions
 {
-    Task<TransactionResponse> GetAsync(string transactionId);
-    Task<TransactionByOrderIdResponse> GetByOrderIdAsync(string orderId);
-}
-
-internal class Transactions : ITransactions
-{
-    private const string Version = "v2/";
     private readonly ApiClient _apiClient;
     internal Transactions(ApiClient apiClient)
     {
         _apiClient = apiClient;
     }
 
-    public Task<TransactionResponse> GetAsync(string transactionId)
+    /// <summary>
+    /// Transaction enquiry
+    /// </summary>
+    public Task<JsonElement> TransactionEnquiryAsync(Dictionary<string, object?>? attributes = null)
     {
-        return _apiClient.GetWithAuth<TransactionResponse>($"{Version}fetch-transaction/{transactionId}");
-    }
-
-    public Task<TransactionByOrderIdResponse> GetByOrderIdAsync(string orderId)
-    {
-        return _apiClient.GetWithAuth<TransactionByOrderIdResponse>($"{Version}order/fetch-transactions/{orderId}");
+        attributes ??= new Dictionary<string, object?>();
+        return _apiClient.PostWithAuth<Dictionary<string, object?>, JsonElement>(ApiConstants.TransactionEnquiry, attributes);
     }
 }

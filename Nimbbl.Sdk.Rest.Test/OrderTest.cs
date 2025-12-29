@@ -1,5 +1,6 @@
 using System;
 using System.Text;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Xunit;
 namespace Nimbbl.Sdk.Rest.Test;
@@ -18,50 +19,34 @@ public class OrderTest
     public async Task ShouldCreateOrder()
     {
         var orderRequest = GivenNewOrderRequest();
-        var orderCreatedResponse = await _orders.CreateAsync(orderRequest);
-        Assert.NotNull(orderCreatedResponse);
-        AssertOrderResponseMatches(GivenOrderCreatedResponseWithInvoiceId(orderRequest.InvoiceId), orderCreatedResponse);
-        Assert.Empty(orderCreatedResponse.OrderLineItem);
+        var orderCreatedResponse = await _orders.CreateOrderAsync(orderRequest);
+        Assert.True(orderCreatedResponse.ValueKind == JsonValueKind.Object);
+        
+        var orderId = orderCreatedResponse.TryGetProperty("order_id", out var oid) ? oid.GetString() : null;
+        Assert.NotNull(orderId);
+        
+        var invoiceId = orderCreatedResponse.TryGetProperty("invoice_id", out var iid) ? iid.GetString() : null;
+        Assert.Equal(orderRequest.InvoiceId, invoiceId);
+        
+        var orderLineItems = orderCreatedResponse.TryGetProperty("order_line_items", out var items) && items.ValueKind == JsonValueKind.Array 
+            ? items.GetArrayLength() : 0;
+        Assert.Equal(1, orderLineItems); // We created one item
     }
 
     [Fact]
     public async Task ShouldCreateAndRetrieveOrder()
     {
         var orderRequest = GivenNewOrderRequest();
-        var response = await _orders.CreateAsync(orderRequest);
-        var orderResponse = await _orders.GetByIdAsync(response.OrderId);
-        Assert.Equal(response.OrderId, orderResponse.OrderId);
-        AssertOrderResponseMatches(GivenOrderCreatedResponseWithInvoiceId(orderRequest.InvoiceId), orderResponse);
-    }
-
-
-    private void AssertOrderResponseMatches(Order expected, Order response)
-    {
-        Assert.NotNull(response.OrderId);
-        Assert.Equal(expected.SubMerchantId, response.SubMerchantId);
-        Assert.True((DateTime.UtcNow - DateTime.Parse(response.OrderDate)).TotalMinutes < 1);
-        Assert.Equal(expected.AmountBeforeTax, response.AmountBeforeTax);
-        Assert.Equal(expected.Tax, response.Tax);
-        Assert.Equal(expected.TotalAmount, response.TotalAmount);
-        Assert.Equal(expected.ReferrerPlatform, response.ReferrerPlatform);
-        Assert.Equal(expected.ReferrerPlatformVersion, response.ReferrerPlatformVersion);
-        Assert.Equal(expected.InvoiceId, response.InvoiceId);
-        Assert.Equal(expected.MerchantShopfrontDomain, response.MerchantShopfrontDomain);
-        Assert.Equal(expected.Attempts, response.Attempts);
-        Assert.Equal(expected.DeviceUserAgent, response.DeviceUserAgent);
-        Assert.Equal(expected.Status, response.Status);
-        Assert.Equal(expected.Currency, response.Currency);
-        Assert.Equal(expected.MaxRetries, response.MaxRetries);
-        Assert.Equal(expected.AdditionalCharges, response.AdditionalCharges);
-        Assert.Equal(expected.GrandTotalAmount, response.GrandTotalAmount);
-        AssertSubMerchantMatches(expected.SubMerchant, response.SubMerchant);
-    }
-
-    private void AssertSubMerchantMatches(SubMerchant expected, SubMerchant response)
-    {
-        Assert.Equal(expected.SubMerchantId, response.SubMerchantId);
-        Assert.Equal(expected.Sandbox, response.Sandbox);
-        Assert.Equal(expected.Description, response.Description);
+        var response = await _orders.CreateOrderAsync(orderRequest);
+        var orderId = response.TryGetProperty("order_id", out var oid) ? oid.GetString() : null;
+        Assert.NotNull(orderId);
+        
+        var orderResponse = await _orders.GetOrderByIdAsync(orderId!);
+        var retrievedOrderId = orderResponse.TryGetProperty("order_id", out var roid) ? roid.GetString() : null;
+        Assert.Equal(orderId, retrievedOrderId);
+        
+        var invoiceId = orderResponse.TryGetProperty("invoice_id", out var iid) ? iid.GetString() : null;
+        Assert.Equal(orderRequest.InvoiceId, invoiceId);
     }
 
     private static OrderRequest GivenNewOrderRequest()
@@ -71,9 +56,11 @@ public class OrderTest
             AmountBeforeTax = 2,
             Currency = "INR",
             InvoiceId = UniqueId(),
+            OrderDate = DateTime.UtcNow,
             Tax = 0,
             TotalAmount = 2,
             ReferrerPlatform = "woocommerce",
+            ReferrerPlatformIdentifier = "test-sdk",
             MerchantShopfrontDomain = "http://example.com",
             OrderLineItems = new[]
             {
@@ -85,44 +72,34 @@ public class OrderTest
                     Quantity = 1,
                     Rate = 2,
                     AmountBeforeTax = 2,
+                    Tax = 0,
                     TotalAmount = 2,
                     ImageUrl = "https=//cdn.pixabay.com/photo/2015/12/09/01/02/mandalas-1084082_960_720.jpg"
                 }
+            },
+            User = new User
+            {
+                Email = "test@example.com",
+                FirstName = "Test",
+                LastName = "User",
+                CountryCode = "+91",
+                MobileNumber = "9876543210"
+            },
+            ShippingAddress = new ShippingAddress
+            {
+                Address1 = "123 Test St",
+                Street = "Test Street",
+                Landmark = "",
+                Area = "Test Area",
+                City = "Mumbai",
+                State = "Maharashtra",
+                Pincode = "400001",
+                AddressType = "home"
             },
             Description = "Test order"
         };
     }
 
-    private static Order GivenOrderCreatedResponseWithInvoiceId(string invoiceId)
-    {
-        return new()
-        {
-            OrderId = "o_NYP0EVOZy5b6R7GD",
-            SubMerchantId = 2,
-            AmountBeforeTax = 2,
-            Tax = 0,
-            TotalAmount = 2,
-            InvoiceId = invoiceId,
-            MerchantShopfrontDomain = "http://example.com",
-            Attempts = 0,
-            Status = "new",
-            Currency = "INR",
-            MaxRetries = 15,
-            BrowserName = "Other",
-            DeviceName = "Other",
-            OsName = "Other",
-            AdditionalCharges = 0,
-            GrandTotalAmount = 2,
-            ReferrerPlatform = "woocommerce",
-            OrderLineItem = Array.Empty<OrderLineItem>(),
-            SubMerchant = new()
-            {
-                SubMerchantId = "303151",
-                Sandbox = "N",
-                Description = "Nimbbl (Razorpay)"
-            }
-        };
-    }
     private static string UniqueId()
     {
         return Convert.ToBase64String(Encoding.UTF8.GetBytes(Guid.NewGuid().ToString("n")));

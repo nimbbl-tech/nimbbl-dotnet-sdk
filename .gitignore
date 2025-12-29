@@ -50,3 +50,11 @@ Thumbs.db
 
 bin/
 obj/
+
+# Sample applications
+MerchantSampleApp/
+
+# Configuration files with sensitive data
+Examples/appsettings.json
+**/appsettings.json
+!**/appsettings.example.json
