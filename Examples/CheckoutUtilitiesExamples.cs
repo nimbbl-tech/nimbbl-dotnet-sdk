@@ -72,7 +72,28 @@ public static class CheckoutUtilitiesExamples
                 return;
             }
             
-            var data = new Dictionary<string, object?> { ["order_id"] = orderId };
+            Dictionary<string, object?> data = [];
+            data["order_id"] = orderId;
+            
+            // Optional: OS type (e.g., "android", "ios")
+            var os = Helpers.GetInput("Enter OS (optional, e.g., android/ios): ", false);
+            if (!string.IsNullOrWhiteSpace(os))
+            {
+                data["os"] = os;
+            }
+            
+            // Optional: UPI app package names
+            var upiApps = Helpers.GetInput("Enter UPI app package names (comma-separated, optional): ", false);
+            if (!string.IsNullOrWhiteSpace(upiApps))
+            {
+                var packageNames = upiApps.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                    .Where(p => !string.IsNullOrWhiteSpace(p))
+                    .ToArray();
+                if (packageNames.Length > 0)
+                {
+                    data["upi_app_package_names"] = packageNames;
+                }
+            }
             
             var result = await api.CheckoutUtilities().ListPaymentModesAsync(data);
             
@@ -259,7 +280,7 @@ public static class CheckoutUtilitiesExamples
                 if (!string.IsNullOrWhiteSpace(cardInputType))
                 {
                     data["card_input_type"] = cardInputType;
-                    var card = new Dictionary<string, object?>();
+                    Dictionary<string, object?> card = [];
                     
                     if (cardInputType == "card_pan")
                     {
@@ -424,7 +445,7 @@ public static class CheckoutUtilitiesExamples
             var includeDevice = Helpers.GetInput("Include device details? (y/N): ", false);
             if (includeDevice?.ToLower() == "y")
             {
-                var device = new Dictionary<string, object?>();
+                Dictionary<string, object?> device = [];
                 var acceptHeader = Helpers.GetInput("Accept Header (optional): ", false);
                 if (!string.IsNullOrWhiteSpace(acceptHeader)) device["accept_header"] = acceptHeader;
                 

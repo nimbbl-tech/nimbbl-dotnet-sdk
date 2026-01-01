@@ -22,7 +22,7 @@ public static class TransactionStatusExamples
         var orderId = Helpers.GetInput("Enter Order ID (or press Enter to skip): ", false);
         var invoiceId = Helpers.GetInput("Enter Invoice ID (or press Enter to skip): ", false);
         
-        var transactionData = new Dictionary<string, object?>();
+        Dictionary<string, object?> transactionData = [];
         if (!string.IsNullOrWhiteSpace(transactionId))
         {
             transactionData["transaction_id"] = transactionId;

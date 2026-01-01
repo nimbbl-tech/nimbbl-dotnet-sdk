@@ -3,7 +3,8 @@ namespace Nimbbl.Sdk.Rest.Common;
 internal static class ApiConstants
 {
     // Base API URL and version
-    public const string BaseUrl = "https://api.nimbbl.tech/api/";
+    public const string ApiPath = "/api/";
+    public const string BaseUrl = "https://api.nimbbl.tech" + ApiPath;
     public const string ApiVersion = "v3";
 
     // Orders

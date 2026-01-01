@@ -53,14 +53,12 @@ The SDK uses environment variables for configuration. You can provide them via:
 
 ### Optional Environment Variables
 
-- `NIMBBL_API_HOST` - API host URL (defaults to production: `https://api.nimbbl.tech`)
-  - Production: `https://api.nimbbl.tech`
-  - UAT: `https://apipp.nimbbl.tech`
-  - QA2: `https://qa2api.nimbbl.tech`
-- `NIMBBL_ENABLE_LOGGING` - Enable/disable logging (defaults to `true`)
+- `NIMBBL_ENABLE_LOGGING` - Enable/disable logging (defaults to `false`)
 - `NIMBBL_DEBUG_LOGGING` - Enable/disable debug logging (defaults to `false`)
-- `NIMBBL_LOG_FILE` - Log file path (defaults to `logs/nimbbl_debug.log`)
+- `NIMBBL_LOG_FILE` - Log file path (defaults to `logs/nimbbl_debug.log` when logging is enabled)
 - `NIMBBL_CHECKOUT_HOST` - Override checkout host (optional)
+
+**Note:** The SDK uses the production API host (`https://api.nimbbl.tech`) by default. For testing environments, you can configure a custom base URL when initializing the SDK.
 
 ## Quick Start
 
@@ -78,9 +76,8 @@ EnvLoader.LoadEnvFile();
 var api = NimbblApi.Initialize(
     accessKey: Environment.GetEnvironmentVariable("NIMBBL_ACCESS_KEY")!,
     accessSecret: Environment.GetEnvironmentVariable("NIMBBL_ACCESS_SECRET")!,
-    apiHost: Environment.GetEnvironmentVariable("NIMBBL_API_HOST"),
-    enableLogging: true,
-    debugLogging: false,
+    enableLogging: true,  // Set to true to enable logging (disabled by default)
+    debugLogging: false,   // Set to true to enable debug logging with unmasked data
     logFilePath: "logs/nimbbl_debug.log"
 );
 
@@ -94,7 +91,7 @@ api.SetBearerToken("your_order_or_merchant_token", expiresAtUtc: DateTime.UtcNow
 var order = await api.Orders().CreateOrderAsync(new Dictionary<string, object?>
 {
     ["invoice_id"] = "INV-12345",
-    ["total_amount"] = 400.00m,
+    ["total_amount"] = 400.0,  // Amount as double (not decimal)
     ["currency"] = "INR"
 });
 
@@ -123,9 +120,8 @@ using Nimbbl.Sdk.Rest.Extensions;
 builder.Services.AddNimbbl(
     accessKey: Environment.GetEnvironmentVariable("NIMBBL_ACCESS_KEY")!,
     accessSecret: Environment.GetEnvironmentVariable("NIMBBL_ACCESS_SECRET")!,
-    apiHost: Environment.GetEnvironmentVariable("NIMBBL_API_HOST"),
-    enableLogging: true,
-    debugLogging: false,
+    enableLogging: true,  // Set to true to enable logging (disabled by default)
+    debugLogging: false, // Set to true to enable debug logging with unmasked data
     logFilePath: "logs/nimbbl_debug.log"
 );
 
@@ -144,7 +140,7 @@ public class MyController : ControllerBase
         var order = await _api.Orders().CreateOrderAsync(new Dictionary<string, object?>
         {
             ["invoice_id"] = "INV-12345",
-            ["total_amount"] = 400.00m,
+            ["total_amount"] = 400.0,  // Amount as double (not decimal)
             ["currency"] = "INR"
         });
         return Ok(order);
@@ -166,7 +162,7 @@ var client = new NimbblClient(
 var order = await client.Orders.CreateOrderAsync(new Dictionary<string, object?>
 {
     ["invoice_id"] = "INV-12345",
-    ["total_amount"] = 400.00m,
+    ["total_amount"] = 400.0,  // Amount as double (not decimal)
     ["currency"] = "INR"
 });
 ```
@@ -175,7 +171,7 @@ var order = await client.Orders.CreateOrderAsync(new Dictionary<string, object?>
 var order = await client.Orders.CreateOrderAsync(new Dictionary<string, object?>
 {
     ["invoice_id"] = "INV-12345",
-    ["total_amount"] = 400.00m,
+    ["total_amount"] = 400.0,  // Amount as double (not decimal)
     ["currency"] = "INR"
 });
 ```
@@ -189,7 +185,7 @@ var order = await client.Orders.CreateOrderAsync(new Dictionary<string, object?>
 var order = await client.Orders.CreateOrderAsync(new Dictionary<string, object?>
 {
     ["invoice_id"] = "INV-12345",
-    ["total_amount"] = 400.00m,
+    ["total_amount"] = 400.0,  // Amount as double (not decimal)
     ["currency"] = "INR"
 });
 
@@ -232,7 +228,7 @@ var otpResult = await client.Payments.ResendPaymentOtpAsync(new Dictionary<strin
 var paymentLink = await client.PaymentLinks.CreatePaymentLinkAsync(new Dictionary<string, object?>
 {
     ["invoice_id"] = "INV-123",
-    ["total_amount"] = 1000m,
+    ["total_amount"] = 1000.0,  // Amount as double (not decimal)
     ["currency"] = "INR",
     ["description"] = "Payment for order",
     ["expires_at"] = DateTime.Now.AddDays(7)
@@ -241,7 +237,7 @@ var paymentLink = await client.PaymentLinks.CreatePaymentLinkAsync(new Dictionar
 // Update payment link
 var updated = await client.PaymentLinks.UpdatePaymentLinkAsync(new Dictionary<string, object?>
 {
-    ["total_amount"] = 1500m
+    ["total_amount"] = 1500.0  // Amount as double (not decimal)
 });
 
 // Enquiry
@@ -258,7 +254,7 @@ var enquiry = await client.PaymentLinks.EnquiryPaymentLinkAsync(new Dictionary<s
 var addresses = await client.Addresses.ListAddressesAsync(new Dictionary<string, object?>
 {
     ["user_id"] = "user_id",
-    ["amount"] = 1000m,
+    ["amount"] = 1000.0,  // Amount as double (not decimal)
     ["currency"] = "INR"
 });
 
@@ -296,7 +292,7 @@ var refund = await client.Refunds.InitiateRefundAsync(new Dictionary<string, obj
 var partialRefund = await client.Refunds.InitiateRefundAsync(new Dictionary<string, object?>
 {
     ["transaction_id"] = "transaction_id",
-    ["refund_amount"] = 50.00m,
+    ["refund_amount"] = 50.0,  // Amount as double (not decimal)
     ["comment"] = "Partial refund"
 });
 ```
@@ -323,7 +319,7 @@ var modes = await client.CheckoutUtilities.ListPaymentModesAsync(new Dictionary<
 var banks = await client.CheckoutUtilities.ListBanksAsync(new Dictionary<string, object?>
 {
     ["order_id"] = "order_id",
-    ["amount"] = 1000m,
+    ["amount"] = 1000.0,  // Amount as double (not decimal)
     ["currency"] = "INR"
 });
 
@@ -359,6 +355,7 @@ Nimbbl.Sdk.Rest/
 ## Documentation
 
 - [BUILD_RUN_PACKAGE.md](BUILD_RUN_PACKAGE.md) - Build, run, and package guide
+- [TESTING_GUIDE.md](TESTING_GUIDE.md) - **Testing guide for testers** - How to test examples and sample app locally
 - [MerchantSampleApp/README.md](MerchantSampleApp/README.md) - Sample application guide
 - [Examples/README.md](Examples/README.md) - Examples and CLI menu guide
 - [Nimbbl API Documentation](https://nimbbl.biz/docs/api-reference/introduction/) - Official API reference

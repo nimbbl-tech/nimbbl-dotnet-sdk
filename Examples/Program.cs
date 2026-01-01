@@ -35,34 +35,13 @@ try
 
     // Initialize Nimbbl API with parameters from environment variables
     // SDK accepts parameters - it doesn't load .env files itself
-    Action<string, string>? logAction = enableLogging == true
-        ? new Action<string, string>((level, message) => 
-        {
-            var color = level switch
-            {
-                "REQUEST" => ConsoleColor.Cyan,
-                "RESPONSE" => ConsoleColor.Green,
-                "RAW_RESPONSE" => ConsoleColor.Yellow,
-                "DESERIALIZATION_ERROR" => ConsoleColor.Red,
-                "ERROR" => ConsoleColor.Red,
-                "INFO" => ConsoleColor.Cyan,
-                "DEBUG" => ConsoleColor.Gray,
-                _ => ConsoleColor.White
-            };
-            Console.ForegroundColor = color;
-            Console.WriteLine($"\n[{level}] {message}\n");
-            Console.ResetColor();
-        })
-        : null;
-    
     var api = NimbblApi.Initialize(
         accessKey: accessKey!,
         accessSecret: accessSecret!,
         apiHost: apiHost,
         enableLogging: enableLogging,
         debugLogging: debugLogging,
-        logFilePath: logFilePath ?? (enableLogging == true ? Path.Combine(AppContext.BaseDirectory, "logs", "nimbbl_debug.log") : null),
-        logAction: logAction);
+        logFilePath: logFilePath ?? (enableLogging == true ? Path.Combine(AppContext.BaseDirectory, "logs", "nimbbl_debug.log") : null));
 
     // Main menu loop
     while (true)

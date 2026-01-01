@@ -16,7 +16,8 @@ public class Util
 
         if (!attributes.TryGetProperty("transaction", out var txn) || txn.ValueKind != JsonValueKind.Object)
         {
-            Log.Logger.GetInstance().Error($"{ErrorMessages.MessageSignatureVerificationMissingParams}: transaction");
+            var logger = Log.Logger.GetInstance();
+            logger.ErrorWithCaller($"{ErrorMessages.MessageSignatureVerificationMissingParams}: transaction");
             return SignatureVerificationResult.FromMissingParams(["transaction"]);
         }
 
@@ -30,7 +31,8 @@ public class Util
         if (signatureVersion != "v3")
         {
             var failMsg = $"Unsupported signature version: {signatureVersion}. Only v3 is supported.";
-            Log.Logger.GetInstance().Error($"{ErrorMessages.MessageSignatureVerificationFailed} - {failMsg}");
+            var logger = Log.Logger.GetInstance();
+            logger.ErrorWithCaller($"{ErrorMessages.MessageSignatureVerificationFailed} - {failMsg}");
             return SignatureVerificationResult.FromFailed(failMsg);
         }
 
@@ -45,6 +47,8 @@ public class Util
 
         // V3 signature verification
         {
+            var logger = Log.Logger.GetInstance();
+            
             var invoiceId = TryGetString(order, "invoice_id") ?? TryGetString(attributes, "invoice_id");
             var transactionType = TryGetString(txn, "transaction_type") ?? TryGetString(txn, "type");
             var eventType = TryGetString(attributes, "event_type");
@@ -52,9 +56,9 @@ public class Util
             var isRefund = (!string.IsNullOrEmpty(transactionType) && transactionType.Contains("refund", StringComparison.OrdinalIgnoreCase)) ||
                            (!string.IsNullOrEmpty(eventType) && eventType.Contains("refund", StringComparison.OrdinalIgnoreCase));
 
-            double? transactionAmount = null;
-            string? transactionCurrency = null;
-            string? status = null;
+            double? transactionAmount;
+            string? transactionCurrency;
+            string? status;
 
             if (isRefund)
             {
@@ -85,7 +89,7 @@ public class Util
 
             if (missing.Count > 0)
             {
-                Log.Logger.GetInstance().Error($"{ErrorMessages.MessageSignatureVerificationMissingParams}: {string.Join(", ", missing)}");
+                logger.ErrorWithCaller($"{ErrorMessages.MessageSignatureVerificationMissingParams}: {string.Join(", ", missing)}");
                 return SignatureVerificationResult.FromMissingParams(missing);
             }
 
@@ -96,13 +100,13 @@ public class Util
             if (!SecureStringEquals(expected, signature!))
             {
                 var failMsg = $"Signature Version: {signatureVersion}, Invoice ID: {invoiceId}, Transaction ID: {transactionId}, Amount: {amountStr}, Currency: {transactionCurrency}, Status: {status}, Type: {transactionType}";
-                Log.Logger.GetInstance().Error($"{ErrorMessages.MessageSignatureVerificationFailed} - {failMsg}");
+                logger.ErrorWithCaller($"{ErrorMessages.MessageSignatureVerificationFailed} - {failMsg}");
                 return SignatureVerificationResult.FromFailed(failMsg);
             }
 
             var okMsg = $"Signature Version: {signatureVersion}, Invoice ID: {invoiceId}, Transaction ID: {transactionId}, Amount: {amountStr}";
             var successMsg = ErrorMessages.MessageSignatureVerificationSuccess ?? "Signature verification succeeded";
-            Log.Logger.GetInstance().Info($"{successMsg} - {okMsg}");
+            logger.InfoWithCaller($"{successMsg} - {okMsg}");
             return SignatureVerificationResult.FromSuccess(okMsg);
         }
     }
@@ -114,11 +118,13 @@ public class Util
         var result = VerifySignature(parsed, secret);
         if (!result.Success)
         {
-            Log.Logger.GetInstance().Error($"{ErrorMessages.MessageWebhookVerificationFailed}: {result.Message}");
+            var logger = Log.Logger.GetInstance();
+            logger.ErrorWithCaller($"{ErrorMessages.MessageWebhookVerificationFailed}: {result.Message}");
         }
         else
         {
-            Log.Logger.GetInstance().Info($"{ErrorMessages.MessageSignatureVerificationSuccess}");
+            var logger = Log.Logger.GetInstance();
+            logger.InfoWithCaller($"{ErrorMessages.MessageSignatureVerificationSuccess}");
         }
         return result;
     }
@@ -133,7 +139,8 @@ public class Util
         }
         catch (System.Exception ex)
         {
-            Log.Logger.GetInstance().Error($"{ErrorMessages.MessageWebhookParseError}: {ex.Message}");
+            var logger = Log.Logger.GetInstance();
+            logger.ErrorWithCaller($"{ErrorMessages.MessageWebhookParseError}: {ex.Message}");
             return null;
         }
     }
@@ -187,18 +194,12 @@ public record SignatureVerificationResult(bool Success, string Message, Signatur
         new(true, $"Signature verification succeeded - {details}", null);
 
     public static SignatureVerificationResult FromFailed(string details) =>
-        new(false, $"Signature verification failed - {details}", new SignatureVerificationError(SignatureVerificationErrorCodes.Failed, details));
+        new(false, $"Signature verification failed - {details}", new SignatureVerificationError(ErrorCodes.SignatureVerificationFailed, details));
 
     public static SignatureVerificationResult FromMissingParams(IEnumerable<string> missing) =>
         new(false, $"Signature verification failed - Missing {string.Join(", ", missing)}",
-            new SignatureVerificationError(SignatureVerificationErrorCodes.MissingParams, $"Missing {string.Join(", ", missing)}"));
+            new SignatureVerificationError(ErrorCodes.SignatureVerificationMissingParams, $"Missing {string.Join(", ", missing)}"));
 }
 
 public record SignatureVerificationError(string Code, string MerchantMessage);
-
-public static class SignatureVerificationErrorCodes
-{
-    public const string Failed = "SIGNATURE_VERIFICATION_FAILED";
-    public const string MissingParams = "SIGNATURE_VERIFICATION_MISSING_PARAMS";
-}
 

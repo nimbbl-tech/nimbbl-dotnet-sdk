@@ -63,7 +63,7 @@ public static class AddressExamples
             
             api.SetBearerToken(token);
             
-            var data = new Dictionary<string, object?>();
+            Dictionary<string, object?> data = [];
             
             // user_id - required for listing addresses
             var userId = Helpers.GetInput("Enter User ID: ", false);
@@ -239,7 +239,7 @@ public static class AddressExamples
             }
             
             Helpers.PrintInfo("Enter address fields to update (press Enter to skip)\n");
-            var data = new Dictionary<string, object?>();
+            Dictionary<string, object?> data = [];
             
             var line1 = Helpers.GetInput("Address Line 1: ", false);
             if (!string.IsNullOrWhiteSpace(line1)) data["address_1"] = line1;

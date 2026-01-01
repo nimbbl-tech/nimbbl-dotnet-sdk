@@ -1,5 +1,3 @@
-using System.Collections.Generic;
-using System.Linq;
 using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -14,26 +12,20 @@ internal static class CentralMasker
     private static readonly HashSet<string> SensitiveHeaderKeys = new(StringComparer.OrdinalIgnoreCase)
     {
         "authorization",
-        "x-nimbbl-user-token",
-        "x-api-key",
-        "x-auth-token",
     };
 
-    // Only mask truly sensitive financial/authentication data, not personal info needed for debugging
-    // Note: access_key and access_secret are NOT masked as they are needed for debugging API requests
+    // Mask sensitive financial/authentication data in INFO logs
+    // These are only visible unmasked when DEBUG logging is enabled
     private static readonly HashSet<string> SensitiveBodyKeys = new(StringComparer.OrdinalIgnoreCase)
     {
-        // Authentication tokens (but NOT access_key/access_secret - needed for debugging)
-        "token", "refresh_token", "api_key", "api_secret", "authorization",
-        "merchant_token", "user_token", "bearer_token",
-        // Payment card sensitive data
-        "password", "card_no", "card_number", "cardnum", "cvv", "cvc",
-        "expiry", "expiry_month", "expiry_year", "card_expiry_mm", "card_expiry_yy", "expiryMonth", "expiryYear",
-        "card_holder", "cardholder", "cardholder_name",
-        // Financial account data
-        "account_number", "ifsc", "pan_card", "cryptogram",
+        // Authentication credentials (masked in INFO, visible in DEBUG)
+        "access_key", "access_secret",
+        // Authentication tokens
+        "token", "refresh_token",
+        // Payment card sensitive data (used in card_details and payment requests)
+        "card_no", "cvv", "cvc", "expiry", "card_holder_name",
         // UPI/VPA (sensitive payment identifiers)
-        "upi_id", "vpa", "upi_va", "payer_vpa"
+        "upi_id"
     };
 
     public static Dictionary<string, string> MaskHeaders(HttpHeaders headers, HttpHeaders? contentHeaders = null)
@@ -60,6 +52,30 @@ internal static class CentralMasker
         }
 
         return masked;
+    }
+
+    /// <summary>
+    /// Get headers without masking (for debug logging)
+    /// </summary>
+    public static Dictionary<string, string> GetUnmaskedHeaders(HttpHeaders headers, HttpHeaders? contentHeaders = null)
+    {
+        var unmasked = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        
+        void AddHeader(HttpHeaders headerCollection)
+        {
+            foreach (var header in headerCollection)
+            {
+                unmasked[header.Key] = string.Join(", ", header.Value);
+            }
+        }
+
+        AddHeader(headers);
+        if (contentHeaders != null)
+        {
+            AddHeader(contentHeaders);
+        }
+
+        return unmasked;
     }
 
     public static string MaskBody(string body)
@@ -145,7 +161,7 @@ internal static class CentralMasker
         if (string.IsNullOrWhiteSpace(value)) return value;
 
         var masked = value;
-        var sensitiveParams = new[] { "token", "access_key", "access_secret", "refresh_token", "api_key", "api_secret" };
+        var sensitiveParams = new[] { "token", "refresh_token" };
         foreach (var param in sensitiveParams)
         {
             masked = Regex.Replace(

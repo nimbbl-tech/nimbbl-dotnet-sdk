@@ -166,7 +166,7 @@ public static class PaymentLinkExamples
             Console.WriteLine("2. Payment Link ID\n");
             var identifierType = Helpers.GetInput("Choose (1 or 2): ");
             
-            var data = new Dictionary<string, object?>();
+            Dictionary<string, object?> data = [];
             if (identifierType == "1")
             {
                 var invoiceId = Helpers.GetInput("Enter Invoice ID: ");
@@ -201,7 +201,7 @@ public static class PaymentLinkExamples
             var lastName = Helpers.GetInput("User Last Name (optional): ", false);
             if (!string.IsNullOrWhiteSpace(firstName) || !string.IsNullOrWhiteSpace(lastName))
             {
-                var user = new Dictionary<string, object?>();
+                Dictionary<string, object?> user = [];
                 if (!string.IsNullOrWhiteSpace(firstName)) user["first_name"] = firstName;
                 if (!string.IsNullOrWhiteSpace(lastName)) user["last_name"] = lastName;
                 data["user"] = user;
@@ -293,7 +293,7 @@ public static class PaymentLinkExamples
             Console.WriteLine("2. Payment Link ID\n");
             var identifierType = Helpers.GetInput("Choose (1 or 2): ");
             
-            var data = new Dictionary<string, object?>();
+            Dictionary<string, object?> data = [];
             if (identifierType == "1")
             {
                 var invoiceId = Helpers.GetInput("Enter Invoice ID: ");
@@ -390,7 +390,7 @@ public static class PaymentLinkExamples
             Console.WriteLine("2. Payment Link ID\n");
             var identifierType = Helpers.GetInput("Choose (1 or 2): ");
             
-            var data = new Dictionary<string, object?>();
+            Dictionary<string, object?> data = [];
             if (identifierType == "1")
             {
                 var invoiceId = Helpers.GetInput("Enter Invoice ID: ");

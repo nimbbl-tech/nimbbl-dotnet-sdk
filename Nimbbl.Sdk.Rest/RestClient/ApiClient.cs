@@ -19,8 +19,6 @@ internal class ApiClient : IDisposable
     private readonly HttpClient _client;
     private readonly string _key;
     private readonly string _secret;
-    private readonly string _baseUrl;
-    private readonly Action<string, string>? _logAction;
         private readonly Dictionary<string, string> _defaultHeaders = new(StringComparer.OrdinalIgnoreCase);
         private string? _explicitBearerToken;
         private DateTime? _explicitTokenExpiryUtc;
@@ -30,16 +28,20 @@ internal class ApiClient : IDisposable
     
     private JsonElement Token => _tokenDoc?.RootElement ?? default;
     
-    // Expose config Key and Secret for Auth class to use in generate-token request
+    /// <summary>
+    /// Gets the access key for authentication
+    /// </summary>
     internal string GetConfigKey() => _key;
+    
+    /// <summary>
+    /// Gets the access secret for authentication
+    /// </summary>
     internal string GetConfigSecret() => _secret;
     
-    public ApiClient(string key, string secret, string baseUrl, Action<string, string>? logAction = null)
+    public ApiClient(string key, string secret, string baseUrl)
     {
         _key = key;
         _secret = secret;
-        _baseUrl = baseUrl;
-        _logAction = logAction;
         _serializerOptions = new(JsonSerializerDefaults.Web)
         {
             AllowTrailingCommas = true,
@@ -57,58 +59,95 @@ internal class ApiClient : IDisposable
         _authenticationService = new(_client, key, secret, _serializerOptions);
     }
 
-    public async Task<TResponse> GetWithAuth<TResponse>(string requestUri)
+    /// <summary>
+    /// Sends a GET request to the specified URI
+    /// </summary>
+    public async Task<TResponse> Get<TResponse>(string requestUri)
     {
-        return await SendWithAuthGuardAsync<TResponse>(CreateRequest(HttpMethod.Get, requestUri));
+        return await ExecuteRequestAsync<TResponse>(CreateRequest(HttpMethod.Get, requestUri));
     }
 
-    public async Task<TResponse> GetWithAuth<TResponse>(string requestUri, Dictionary<string, object?>? queryParams)
-    {
-        var uri = BuildQueryString(requestUri, queryParams);
-        return await SendWithAuthGuardAsync<TResponse>(CreateRequest(HttpMethod.Get, uri));
-    }
-
-    public async Task<TResponse> PostWithAuth<TRequest, TResponse>(string requestUri, TRequest body)
-        where TRequest : class
-    {
-        return await SendWithAuthGuardAsync<TResponse>(CreateRequest(HttpMethod.Post, requestUri, body));
-    }
-
-    public async Task<TResponse> PatchWithAuth<TRequest, TResponse>(string requestUri, TRequest body)
-        where TRequest : class
-    {
-        return await SendWithAuthGuardAsync<TResponse>(CreateRequest(HttpMethod.Patch, requestUri, body));
-    }
-
-    public async Task<TResponse> DeleteWithAuth<TResponse>(string requestUri)
-    {
-        return await SendWithAuthGuardAsync<TResponse>(CreateRequest(HttpMethod.Delete, requestUri));
-    }
-
-    public async Task<TResponse> DeleteWithAuth<TResponse>(string requestUri, Dictionary<string, object?>? queryParams)
+    /// <summary>
+    /// Sends a GET request with query parameters
+    /// </summary>
+    public async Task<TResponse> Get<TResponse>(string requestUri, Dictionary<string, object?>? queryParams)
     {
         var uri = BuildQueryString(requestUri, queryParams);
-        return await SendWithAuthGuardAsync<TResponse>(CreateRequest(HttpMethod.Delete, uri));
+        return await ExecuteRequestAsync<TResponse>(CreateRequest(HttpMethod.Get, uri));
     }
 
-        public void SetBearerToken(string token, DateTime? expiresAtUtc = null)
-        {
-            _explicitBearerToken = token;
-            _explicitTokenExpiryUtc = expiresAtUtc;
-        }
+    /// <summary>
+    /// Sends a POST request with a request body
+    /// </summary>
+    public async Task<TResponse> Post<TRequest, TResponse>(string requestUri, TRequest body)
+        where TRequest : class
+    {
+        return await ExecuteRequestAsync<TResponse>(CreateRequest(HttpMethod.Post, requestUri, body));
+    }
 
-        public void AddHeader(string key, string value)
+    /// <summary>
+    /// Sends a PATCH request with a request body
+    /// </summary>
+    public async Task<TResponse> Patch<TRequest, TResponse>(string requestUri, TRequest body)
+        where TRequest : class
+    {
+        return await ExecuteRequestAsync<TResponse>(CreateRequest(HttpMethod.Patch, requestUri, body));
+    }
+
+    /// <summary>
+    /// Sends a DELETE request to the specified URI
+    /// </summary>
+    public async Task<TResponse> Delete<TResponse>(string requestUri)
+    {
+        return await ExecuteRequestAsync<TResponse>(CreateRequest(HttpMethod.Delete, requestUri));
+    }
+
+    /// <summary>
+    /// Sends a DELETE request with query parameters
+    /// </summary>
+    public async Task<TResponse> Delete<TResponse>(string requestUri, Dictionary<string, object?>? queryParams)
+    {
+        var uri = BuildQueryString(requestUri, queryParams);
+        return await ExecuteRequestAsync<TResponse>(CreateRequest(HttpMethod.Delete, uri));
+    }
+
+    /// <summary>
+    /// Sets an explicit bearer token for authentication
+    /// </summary>
+    public void SetBearerToken(string token, DateTime? expiresAtUtc = null)
+    {
+        _explicitBearerToken = token;
+        _explicitTokenExpiryUtc = expiresAtUtc;
+    }
+
+    /// <summary>
+    /// Adds a default header to all requests
+    /// </summary>
+    public void AddHeader(string key, string value)
         {
             if (string.IsNullOrWhiteSpace(key)) return;
             _defaultHeaders[key] = value;
         }
 
 
-    private async Task<TResponse> SendWithAuthGuardAsync<TResponse>(HttpRequestMessage message)
+    /// <summary>
+    /// Executes an HTTP request with logging, retry logic, and error handling
+    /// </summary>
+    private async Task<TResponse> ExecuteRequestAsync<TResponse>(HttpRequestMessage message)
     {
-        // Store caller info from request log to reuse for response log and error logs
+        // Get caller info from request log to reuse for response log
         var callerInfo = await LogRequestAsync(message);
-        var httpResponse = await SendResilientRequestAsync(callerInfo);
+        HttpResponseMessage httpResponse;
+        try
+        {
+            httpResponse = await RetryRequestAsync(SendRequestAsync, message, 1);
+        }
+        catch (System.Exception ex)
+        {
+            var logger = Logger.GetInstance();
+            logger.ExceptionWithCaller("RetryRequestAsync failed", ex, callerInfo);
+            throw;
+        }
         
         // Read response body for logging (clone it first to avoid consuming)
         string? responseBody = null;
@@ -124,7 +163,7 @@ internal class ApiClient : IDisposable
         catch (System.Exception ex)
         {
             var logger = Logger.GetInstance();
-            logger.ExceptionWithCaller("Error reading response body", ex, callerInfo.Module, callerInfo.Line, callerInfo.Function);
+            logger.ExceptionWithCaller("Error reading response body", ex, callerInfo);
             throw;
         }
         
@@ -134,21 +173,21 @@ internal class ApiClient : IDisposable
         // If HTTP status is success but body carries an error envelope, surface it
         if (httpResponse.IsSuccessStatusCode)
         {
-            ThrowIfErrorEnvelope(responseBody, httpResponse.StatusCode);
+            ThrowIfErrorEnvelope(responseBody);
         }
         
         // Log raw JSON for debugging (before deserialization attempt)
         if (responseBody != null)
         {
-            // Use Logger class for consistent format, reusing caller info from request log
+            // Use Logger class for consistent format
             var logger = Logger.GetInstance();
-            logger.DebugWithCaller($"Raw JSON Response (before deserialization):\n{responseBody}", callerInfo.Module, callerInfo.Line, callerInfo.Function);
+            logger.DebugWithCaller($"Raw JSON Response (before deserialization):\n{responseBody}", callerInfo);
         }
         else
         {
-            // Use Logger class for consistent format, reusing caller info from request log
+            // Use Logger class for consistent format
             var logger = Logger.GetInstance();
-            logger.DebugWithCaller("Response body is NULL", callerInfo.Module, callerInfo.Line, callerInfo.Function);
+            logger.DebugWithCaller("Response body is NULL", callerInfo);
         }
         
         // Attempt deserialization with error handling
@@ -174,45 +213,40 @@ internal class ApiClient : IDisposable
         }
         catch (JsonException ex)
         {
-            // Log the error with the raw response for debugging - ALWAYS log this
-            if (_logAction != null)
+            // Log the error with the raw response for debugging
+            try
             {
-                try
+                var logger = Logger.GetInstance();
+                var errorMsg = $"Failed to deserialize response:\n{ex.Message}\nPath: {ex.Path}\nLineNumber: {ex.LineNumber}\nBytePositionInLine: {ex.BytePositionInLine}";
+                if (responseBody != null)
                 {
-                    var errorMsg = $"Failed to deserialize response:\n{ex.Message}\nPath: {ex.Path}\nLineNumber: {ex.LineNumber}\nBytePositionInLine: {ex.BytePositionInLine}";
-                    if (responseBody != null)
-                    {
-                        errorMsg += $"\n\nRaw JSON that failed:\n{responseBody}";
-                    }
-                    else
-                    {
-                        errorMsg += "\n\nResponse body was NULL";
-                    }
-                    _logAction("DESERIALIZATION_ERROR", errorMsg);
+                    errorMsg += $"\n\nRaw JSON that failed:\n{responseBody}";
                 }
-                catch
+                else
                 {
-                    // If logging fails, use Logger as fallback
-                    var logger = Logger.GetInstance();
-                    logger.Exception("Failed to log deserialization error", ex);
+                    errorMsg += "\n\nResponse body was NULL";
                 }
+                logger.ErrorWithCaller(errorMsg);
+            }
+            catch
+            {
+                // If logging fails, ignore
             }
             throw;
         }
         catch (System.Exception ex)
         {
             // Catch any other exceptions during deserialization
-            if (_logAction != null && responseBody != null)
+            if (responseBody != null)
             {
                 try
                 {
-                    _logAction("DESERIALIZATION_ERROR", 
-                        $"Unexpected error during deserialization:\n{ex.GetType().Name}: {ex.Message}\n\nRaw JSON:\n{responseBody}");
+                    var logger = Logger.GetInstance();
+                    logger.ErrorWithCaller($"Unexpected error during deserialization:\n{ex.GetType().Name}: {ex.Message}\n\nRaw JSON:\n{responseBody}", callerInfo);
                 }
                 catch
                 {
-                    var logger = Logger.GetInstance();
-                    logger.Exception("Failed to log deserialization error", ex);
+                    // If logging fails, ignore
                 }
             }
             throw;
@@ -220,29 +254,17 @@ internal class ApiClient : IDisposable
         
         if (response == null) throw new ApplicationException(ErrorMessages.MessageNoValueReturned);
         return response;
-
-        async Task<HttpResponseMessage> SendResilientRequestAsync((string Module, string Function, int Line) callerInfo)
-        {
-            try
-            {
-                var result = await WithRetry(SendRequestAsync, message, 1);
-                return result;
-            }
-            catch (System.Exception ex)
-            {
-                var logger = Logger.GetInstance();
-                logger.ExceptionWithCaller("SendResilientRequestAsync failed", ex, callerInfo.Module, callerInfo.Line, callerInfo.Function);
-                throw;
-            }
-        }
     }
 
-    private async Task<HttpResponseMessage> WithRetry(Func<HttpRequestMessage, Task<HttpResponseMessage>> request, HttpRequestMessage message, ushort retryCount)
+    /// <summary>
+    /// Retries a request if it fails, with automatic token refresh on auth failures
+    /// </summary>
+    private async Task<HttpResponseMessage> RetryRequestAsync(Func<HttpRequestMessage, Task<HttpResponseMessage>> sendRequest, HttpRequestMessage message, ushort retryCount)
     {
         HttpResponseMessage response;
         do
         {
-            response = await request(CloneRequest(message));
+            response = await sendRequest(CloneRequest(message));
             if (response.IsSuccessStatusCode) 
             {
                 return response;
@@ -257,20 +279,25 @@ internal class ApiClient : IDisposable
         return response;
     }
 
+    /// <summary>
+    /// Checks if the response indicates an authentication failure
+    /// </summary>
     private static bool IsAuthFailure(HttpResponseMessage response)
     {
         return response.StatusCode is HttpStatusCode.Forbidden or HttpStatusCode.Unauthorized;
     }
 
-    private async Task HandleErrorResponseAsync(HttpResponseMessage httpResponse)
+    /// <summary>
+    /// Handles error responses by parsing error messages and throwing appropriate exceptions
+    /// </summary>
+    private static async Task HandleErrorResponseAsync(HttpResponseMessage httpResponse)
     {
         var errorText = await httpResponse.Content.ReadAsStringAsync();
         
-        // Log the error response (masked) - CentralMasker is ONLY used for logging
-        var maskedErrorText = CentralMasker.MaskBody(errorText);
-        // Use Logger class for consistent format
+        // Log the error response (masked unless debug is enabled) - CentralMasker is ONLY used for logging
         var logger = Logger.GetInstance();
-        logger.Error($"HTTP {httpResponse.StatusCode}: {maskedErrorText}");
+        var logText = Logger.IsDebugEnabled() ? errorText : CentralMasker.MaskBody(errorText);
+        logger.ErrorWithCaller($"HTTP {httpResponse.StatusCode}: {logText}");
         
         // Use unmasked errorText for exceptions (exceptions are not logging)
         if (!IsValidJson(errorText)) throw MapException(httpResponse.StatusCode, errorText, ErrorCodes.ServerError);
@@ -321,6 +348,9 @@ internal class ApiClient : IDisposable
         }
     }
 
+    /// <summary>
+    /// Maps HTTP status codes to appropriate Nimbbl exception types
+    /// </summary>
     private static NimbblException MapException(HttpStatusCode statusCode, string message, string? errorCode)
     {
         var code = (int)statusCode;
@@ -336,6 +366,9 @@ internal class ApiClient : IDisposable
             _ => new ApiException(safeMessage, code, errorCode ?? ErrorCodes.ServerError)
         };
     }
+    /// <summary>
+    /// Sends an HTTP request with automatic authorization
+    /// </summary>
     private async Task<HttpResponseMessage> SendRequestAsync(HttpRequestMessage request)
     {
         try
@@ -346,14 +379,15 @@ internal class ApiClient : IDisposable
         }
         catch (System.Exception ex)
         {
-            // Capture caller info for better error logging
-            var callerInfo = Logger.GetInstance().GetCallerInfo();
             var logger = Logger.GetInstance();
-            logger.ExceptionWithCaller("SendRequestAsync failed", ex, callerInfo.Module, callerInfo.Line, callerInfo.Function);
+            logger.ExceptionWithCaller("SendRequestAsync failed", ex);
             throw;
         }
     }
 
+    /// <summary>
+    /// Lazily authorizes the request by setting bearer token (cached or newly generated)
+    /// </summary>
     private async Task LazyAuthorizeRequestAsync(HttpRequestMessage request)
     {
             // Prefer explicitly set bearer token if valid (or no expiry provided)
@@ -411,6 +445,9 @@ internal class ApiClient : IDisposable
 
 
 
+    /// <summary>
+    /// Builds a query string from a dictionary of parameters
+    /// </summary>
     private static string BuildQueryString(string requestUri, Dictionary<string, object?>? queryParams)
     {
         if (queryParams == null || queryParams.Count == 0)
@@ -437,14 +474,19 @@ internal class ApiClient : IDisposable
         return $"{requestUri}{separator}{queryString}";
     }
 
+    /// <summary>
+    /// Creates an HTTP request message without a body
+    /// </summary>
     private HttpRequestMessage CreateRequest(HttpMethod method, string requestUri)
     {
-        var normalizedPath = NormalizeRelativePath(requestUri);
-        var message = new HttpRequestMessage(method, normalizedPath);
+        var message = new HttpRequestMessage(method, requestUri);
         ApplyDefaultHeaders(message);
         return message;
     }
 
+    /// <summary>
+    /// Creates an HTTP request message with a serialized body
+    /// </summary>
     private HttpRequestMessage CreateRequest<TRequest>(HttpMethod method, string requestUri, TRequest body) where TRequest : class
     {
         var message = CreateRequest(method, requestUri);
@@ -454,6 +496,9 @@ internal class ApiClient : IDisposable
         return message;
     }
 
+    /// <summary>
+    /// Clones an HTTP request message for retry purposes
+    /// </summary>
     private static HttpRequestMessage CloneRequest(HttpRequestMessage message)
     {
             var clone = new HttpRequestMessage(message.Method, message.RequestUri)
@@ -470,7 +515,7 @@ internal class ApiClient : IDisposable
     /// <summary>
     /// Detects error envelope in a 2xx response and throws mapped exception.
     /// </summary>
-    private void ThrowIfErrorEnvelope(string? responseBody, HttpStatusCode statusCode)
+    private static void ThrowIfErrorEnvelope(string? responseBody)
     {
         if (string.IsNullOrWhiteSpace(responseBody)) return;
         try
@@ -494,53 +539,27 @@ internal class ApiClient : IDisposable
         }
     }
 
+
     /// <summary>
-    /// If base URL already contains a version suffix (e.g., .../v3), avoid double prefixing when requestUri also includes v3/.
+    /// Applies default headers to the request message
     /// </summary>
-    private string NormalizeRelativePath(string requestUri)
+    private void ApplyDefaultHeaders(HttpRequestMessage message)
     {
-        var trimmedBase = _client.BaseAddress?.ToString().TrimEnd('/') ?? string.Empty;
-        var trimmedReq = requestUri.TrimStart('/');
-
-        // Detect version suffix in base (e.g., /v3 or /v2)
-        var baseHasVersion = trimmedBase.EndsWith("/v3", StringComparison.OrdinalIgnoreCase)
-                             || trimmedBase.EndsWith("/v2", StringComparison.OrdinalIgnoreCase)
-                             || trimmedBase.EndsWith("/v1", StringComparison.OrdinalIgnoreCase);
-
-        if (baseHasVersion && (trimmedReq.StartsWith("v3/", StringComparison.OrdinalIgnoreCase)
-            || trimmedReq.StartsWith("v2/", StringComparison.OrdinalIgnoreCase)
-            || trimmedReq.StartsWith("v1/", StringComparison.OrdinalIgnoreCase)))
+        foreach (var kvp in _defaultHeaders)
         {
-            // Strip leading version from request to avoid double-prefix
-            var slashIndex = trimmedReq.IndexOf('/');
-            if (slashIndex >= 0 && slashIndex < trimmedReq.Length - 1)
+            // Do not override if already present
+            if (!message.Headers.Contains(kvp.Key))
             {
-                trimmedReq = trimmedReq[(slashIndex + 1)..];
-            }
-            else
-            {
-                trimmedReq = string.Empty;
+                message.Headers.TryAddWithoutValidation(kvp.Key, kvp.Value);
             }
         }
-
-        return trimmedReq;
     }
 
-        private void ApplyDefaultHeaders(HttpRequestMessage message)
-        {
-            foreach (var kvp in _defaultHeaders)
-            {
-                // Do not override if already present
-                if (!message.Headers.Contains(kvp.Key))
-                {
-                    message.Headers.TryAddWithoutValidation(kvp.Key, kvp.Value);
-                }
-            }
-        }
-
+    /// <summary>
+    /// Logs the HTTP request details and returns caller info for reuse in response logs
+    /// </summary>
     private async Task<(string Module, string Function, int Line)> LogRequestAsync(HttpRequestMessage request)
     {
-        var defaultCaller = ("unknown", "-", 0);
         try
         {
             // Get full URL (absolute URI)
@@ -554,17 +573,19 @@ internal class ApiClient : IDisposable
             // Use Logger class for logging
             var logger = Logger.GetInstance();
             
-            // Get caller info before logging (to reuse for response log)
-            var callerInfo = logger.GetCallerInfo();
+            // Get caller info once to reuse for response logs
+            var callerInfo = Logger.GetCaller();
             
             // Build log message with full URL
             var logMessage = $"{method} {uri}";
             
-            // Log request headers (with masking for sensitive values)
-            var maskedHeaders = CentralMasker.MaskHeaders(request.Headers, request.Content?.Headers);
-            if (maskedHeaders.Any())
+            // Log request headers (with masking for sensitive values unless debug is enabled)
+            var headersToLog = Logger.IsDebugEnabled() 
+                ? CentralMasker.GetUnmaskedHeaders(request.Headers, request.Content?.Headers)
+                : CentralMasker.MaskHeaders(request.Headers, request.Content?.Headers);
+            if (headersToLog.Any())
             {
-                var headersJson = System.Text.Json.JsonSerializer.Serialize(maskedHeaders, new JsonSerializerOptions 
+                var headersJson = JsonSerializer.Serialize(headersToLog, new JsonSerializerOptions 
                 { 
                     WriteIndented = true 
                 });
@@ -577,16 +598,29 @@ internal class ApiClient : IDisposable
             {
                 // Read body (for StringContent, this is safe to read multiple times)
                 requestBody = await request.Content.ReadAsStringAsync();
-                var maskedBody = CentralMasker.MaskBody(requestBody);
-                logMessage += $"\nRequest Body: {maskedBody}";
+                var bodyToLog = Logger.IsDebugEnabled() ? requestBody : CentralMasker.MaskBody(requestBody);
+                logMessage += $"\nRequest Body: {bodyToLog}";
                 
                 // Recreate content from the string so it can be read again for the actual HTTP request
                 // This is safe for StringContent and ensures the stream isn't consumed
                 request.Content = new StringContent(requestBody, System.Text.Encoding.UTF8, "application/json");
             }
             
-            // Use Logger.Info for logging
-            logger.Info(logMessage);
+            // Use Logger.InfoWithCaller for logging with caller info
+            logger.InfoWithCaller(logMessage, callerInfo);
+            
+            // Log raw request body for debugging (unmasked, only when debug is enabled)
+            if (Logger.IsDebugEnabled())
+            {
+                if (requestBody != null)
+                {
+                    logger.DebugWithCaller($"Raw JSON Request (before sending):\n{requestBody}", callerInfo);
+                }
+                else
+                {
+                    logger.DebugWithCaller("Request body is NULL", callerInfo);
+                }
+            }
             
             return callerInfo;
         }
@@ -594,14 +628,17 @@ internal class ApiClient : IDisposable
         {
             // Log the exception using Logger
             var logger = Logger.GetInstance();
-            logger.Exception("LogRequestAsync failed", ex);
-            return defaultCaller;
+            logger.ExceptionWithCaller("LogRequestAsync failed", ex);
+            return ("unknown", "-", 0);
         }
     }
 
 
 
-    private async Task LogResponseAsync(HttpResponseMessage response, string? responseBody = null, (string Module, string Function, int Line)? callerInfo = null)
+    /// <summary>
+    /// Logs the HTTP response details
+    /// </summary>
+    private static async Task LogResponseAsync(HttpResponseMessage response, string? responseBody = null, (string Module, string Function, int Line)? callerInfo = null)
     {
         try
         {
@@ -614,26 +651,21 @@ internal class ApiClient : IDisposable
             // Build log message
             var logMessage = $"{statusCode} {statusText} for {uri}";
             
-            // Log response body (use provided body or read it)
+            // Log response body (use provided body or read it, masked unless debug is enabled)
             if (responseBody != null)
             {
-                logMessage += $"\nResponse Body: {CentralMasker.MaskBody(responseBody)}";
+                var bodyToLog = Logger.IsDebugEnabled() ? responseBody : CentralMasker.MaskBody(responseBody);
+                logMessage += $"\nResponse Body: {bodyToLog}";
             }
             else if (response.Content != null)
             {
                 var body = await response.Content.ReadAsStringAsync();
-                logMessage += $"\nResponse Body: {CentralMasker.MaskBody(body)}";
+                var bodyToLog = Logger.IsDebugEnabled() ? body : CentralMasker.MaskBody(body);
+                logMessage += $"\nResponse Body: {bodyToLog}";
             }
             
-            // Use Logger.Info with caller info from request log
-            if (callerInfo.HasValue)
-            {
-                logger.InfoWithCaller(logMessage, callerInfo.Value.Module, callerInfo.Value.Line, callerInfo.Value.Function);
-            }
-            else
-            {
-                logger.Info(logMessage);
-            }
+            // Use Logger.Info with caller info from request log (or get fresh if not provided)
+            logger.InfoWithCaller(logMessage, callerInfo);
         }
         catch
         {
@@ -659,6 +691,5 @@ internal class ApiClient : IDisposable
     public void Dispose()
     {
         Dispose(disposing: true);
-        GC.SuppressFinalize(this);
     }
 }

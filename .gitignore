@@ -58,3 +58,9 @@ MerchantSampleApp/
 Examples/appsettings.json
 **/appsettings.json
 !**/appsettings.example.json
+
+# Documentation files
+PUBLISH_TO_NUGET.md
+
+# Publishing scripts (may contain API keys)
+publish-to-nuget.sh
