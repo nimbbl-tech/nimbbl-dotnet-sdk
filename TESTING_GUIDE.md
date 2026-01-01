@@ -77,7 +77,7 @@ cd /path/to/nimbbl-dotnet-sdk
 
    ```xml
    <ItemGroup>
-     <PackageReference Include="Nimbbl.Sdk.Rest" Version="1.3.4" />
+     <PackageReference Include="Nimbbl.Sdk.Rest" Version="1.3.5-rc1" />
    </ItemGroup>
    ```
 
@@ -297,7 +297,7 @@ cd /path/to/nimbbl-dotnet-sdk
 
    ```xml
    <ItemGroup>
-     <PackageReference Include="Nimbbl.Sdk.Rest" Version="1.3.4" />
+     <PackageReference Include="Nimbbl.Sdk.Rest" Version="1.3.5-rc1" />
    </ItemGroup>
    ```
 
@@ -696,7 +696,7 @@ dotnet restore
 
 # Verify project reference in .csproj file
 # For local source: Should have <ProjectReference Include="..\Nimbbl.Sdk.Rest\Nimbbl.Sdk.Rest.csproj" />
-# For NuGet: Should have <PackageReference Include="Nimbbl.Sdk.Rest" Version="1.3.4" />
+# For NuGet: Should have <PackageReference Include="Nimbbl.Sdk.Rest" Version="1.3.5-rc1" />
 ```
 
 #### 7. NuGet Package Not Found
@@ -725,6 +725,7 @@ dotnet restore
 **Issue:** Examples app runs but menu doesn't appear
 
 **Solution:**
+
 - Check if `.env` file exists and has valid credentials
 - Verify console output for error messages
 - Check log files for detailed errors
@@ -787,5 +788,5 @@ If you encounter issues not covered here:
 
 ---
 
-**Last Updated:** December 2024  
-**SDK Version:** 1.3.4
+**Last Updated:** January 2025  
+**SDK Version:** 1.3.5-rc1
