@@ -158,6 +158,7 @@ public class Logger
     {
         "GetCaller", "Write", "Info", "Error", "Debug", "Warning", "Critical", "Exception", "FormatMessage",
         "LogRequestAsync", "LogResponseAsync", "ExecuteRequestAsync", "RetryRequestAsync", "HandleErrorResponseAsync",
+        "Post", "Get", "Put", "Delete", "Patch", // ApiClient HTTP method wrappers
         "Start", "MoveNext", "ExecutionContextCallback", "Run", "AwaitUnsafeOnCompleted", "SetResult", "SetException"
     };
 
@@ -168,14 +169,13 @@ public class Logger
 
     private static readonly HashSet<string> SkipTypes = new(StringComparer.OrdinalIgnoreCase)
     {
-        "AsyncMethodBuilderCore", "AsyncStateMachineBox", "AsyncTaskMethodBuilder", "TaskAwaiter", "ConfiguredTaskAwaiter"
+        "AsyncMethodBuilderCore", "AsyncStateMachineBox", "AsyncTaskMethodBuilder", "TaskAwaiter", "ConfiguredTaskAwaiter",
+        "ApiClient", "Logger"
     };
 
     internal static (string Module, string Function, int Line) GetCaller()
     {
         var stack = new System.Diagnostics.StackTrace(true);
-        string? fallbackModuleName = null;
-        string? fallbackFunctionName = null;
 
         // Search through stack frames to find first non-logger/non-ApiClient frame
         for (int i = 0; i < stack.FrameCount; i++)
@@ -184,28 +184,53 @@ public class Logger
             if (frame == null) continue;
 
             var method = frame.GetMethod();
-            var methodName = method?.Name ?? "";
+            if (method == null) continue;
+
+            var methodName = method.Name;
             var file = frame.GetFileName();
             var fileName = !string.IsNullOrWhiteSpace(file) ? Path.GetFileName(file) : null;
-            var declaringType = method?.DeclaringType;
+            var declaringType = method.DeclaringType;
 
-            // Skip frames from logger or ApiClient files
+            // Skip frames from logger or ApiClient files (if we have file info)
             if (fileName != null && SkipFiles.Contains(fileName))
             {
                 continue;
             }
 
-            // Skip async infrastructure types
+            // Skip ApiClient and Logger types by checking type name and namespace
+            // This works even without debug symbols
             if (declaringType != null)
             {
                 var typeName = declaringType.Name;
+                var fullTypeName = declaringType.FullName ?? "";
+                var namespaceName = declaringType.Namespace ?? "";
+
+                // Skip ApiClient type (check by name, full name, or namespace)
+                if (typeName.Equals("ApiClient", StringComparison.OrdinalIgnoreCase) ||
+                    fullTypeName.Equals("Nimbbl.Sdk.Rest.RestClient.ApiClient", StringComparison.OrdinalIgnoreCase) ||
+                    (namespaceName.Contains("Nimbbl.Sdk.Rest.RestClient", StringComparison.OrdinalIgnoreCase) && 
+                     typeName.Equals("ApiClient", StringComparison.OrdinalIgnoreCase)))
+                {
+                    continue;
+                }
+
+                // Skip Logger type (check by name, full name, or namespace)
+                if (typeName.Equals("Logger", StringComparison.OrdinalIgnoreCase) ||
+                    fullTypeName.Equals("Nimbbl.Sdk.Rest.Log.Logger", StringComparison.OrdinalIgnoreCase) ||
+                    (namespaceName.Contains("Nimbbl.Sdk.Rest.Log", StringComparison.OrdinalIgnoreCase) && 
+                     typeName.Equals("Logger", StringComparison.OrdinalIgnoreCase)))
+                {
+                    continue;
+                }
+
+                // Skip async infrastructure types
                 if (SkipTypes.Any(skipType => typeName.Contains(skipType, StringComparison.OrdinalIgnoreCase)))
                 {
                     continue;
                 }
             }
 
-            // Skip wrapper functions
+            // Skip wrapper functions (but only if not already skipped by type)
             if (!string.IsNullOrEmpty(methodName) && SkipFunctions.Contains(methodName))
             {
                 continue;
@@ -219,7 +244,7 @@ public class Logger
             
             if (methodName == "MoveNext" || methodName.Contains("d__"))
             {
-                var stateMachineType = method?.DeclaringType;
+                var stateMachineType = method.DeclaringType;
                 if (stateMachineType != null)
                 {
                     var typeName = stateMachineType.Name;
@@ -231,6 +256,26 @@ public class Logger
                         {
                             extractedMethodName = typeName.Substring(1, endIdx - 1);
                             actualDeclaringType = stateMachineType.DeclaringType;
+                            
+                            // If the actual declaring type is ApiClient or Logger, skip this frame
+                            if (actualDeclaringType != null)
+                            {
+                                var actualTypeName = actualDeclaringType.Name;
+                                var actualFullTypeName = actualDeclaringType.FullName ?? "";
+                                var actualNamespaceName = actualDeclaringType.Namespace ?? "";
+                                
+                                if (actualTypeName.Equals("ApiClient", StringComparison.OrdinalIgnoreCase) ||
+                                    actualFullTypeName.Equals("Nimbbl.Sdk.Rest.RestClient.ApiClient", StringComparison.OrdinalIgnoreCase) ||
+                                    (actualNamespaceName.Contains("Nimbbl.Sdk.Rest.RestClient", StringComparison.OrdinalIgnoreCase) && 
+                                     actualTypeName.Equals("ApiClient", StringComparison.OrdinalIgnoreCase)) ||
+                                    actualTypeName.Equals("Logger", StringComparison.OrdinalIgnoreCase) ||
+                                    actualFullTypeName.Equals("Nimbbl.Sdk.Rest.Log.Logger", StringComparison.OrdinalIgnoreCase) ||
+                                    (actualNamespaceName.Contains("Nimbbl.Sdk.Rest.Log", StringComparison.OrdinalIgnoreCase) && 
+                                     actualTypeName.Equals("Logger", StringComparison.OrdinalIgnoreCase)))
+                                {
+                                    continue;
+                                }
+                            }
                         }
                     }
                 }
@@ -248,24 +293,29 @@ public class Logger
                 ? $"{actualDeclaringType.Name}.{methodName}" 
                 : methodName;
 
-            // If we have file info, use it immediately (preferred)
+            // Determine module name: prefer file name, fallback to type name
+            string moduleName;
             if (hasFileInfo)
             {
-                return (fileName!, functionName, frame.GetFileLineNumber());
+                moduleName = fileName!;
             }
-            
-            // Store as fallback if we don't have file info yet
-            if (fallbackFunctionName == null)
+            else if (actualDeclaringType != null)
             {
-                fallbackModuleName = "unknown";
-                fallbackFunctionName = functionName;
+                // Use type name as module name when file info is not available
+                moduleName = actualDeclaringType.Name;
             }
+            else
+            {
+                moduleName = "unknown";
+            }
+
+            // Return the first valid frame (with or without file info)
+            var lineNumber = hasFileInfo ? frame.GetFileLineNumber() : 0;
+            return (moduleName, functionName, lineNumber);
         }
 
-        // Return fallback if found, otherwise return defaults
-        return fallbackFunctionName != null 
-            ? (fallbackModuleName!, fallbackFunctionName, 0)
-            : ("unknown", "-", 0);
+        // If no valid frame found, return defaults
+        return ("unknown", "-", 0);
     }
 }
 
