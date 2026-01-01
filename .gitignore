@@ -57,16 +57,8 @@ packages/*/*
 !packages/*/*.nupkg
 !packages/*/*.dll
 
-# Sample applications (ignore most files but allow documentation and project file)
-MerchantSampleApp/*
-!MerchantSampleApp/INTEGRATION.md
-!MerchantSampleApp/MerchantSampleApp.csproj
-!MerchantSampleApp/README.md
-!MerchantSampleApp/LOCAL_SETUP.md
-!MerchantSampleApp/WEBHOOK_TESTING.md
-MerchantSampleApp/**/*
-!MerchantSampleApp/**/*.md
-!MerchantSampleApp/**/*.csproj
+# Sample applications
+MerchantSampleApp/
 
 # Configuration files with sensitive data
 Examples/appsettings.json
