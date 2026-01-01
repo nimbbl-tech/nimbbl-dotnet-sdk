@@ -50,6 +50,12 @@ Thumbs.db
 
 bin/
 obj/
+# Ignore packages directory but allow versioned subdirectories
+packages/*
+!packages/*/
+packages/*/*
+!packages/*/*.nupkg
+!packages/*/*.dll
 
 # Sample applications
 MerchantSampleApp/
