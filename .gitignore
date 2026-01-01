@@ -58,7 +58,8 @@ packages/*/*
 !packages/*/*.dll
 
 # Sample applications (ignore most files but allow documentation and project file)
-MerchantSampleApp/*
+MerchantSampleApp/**
+!MerchantSampleApp/
 !MerchantSampleApp/INTEGRATION.md
 !MerchantSampleApp/MerchantSampleApp.csproj
 !MerchantSampleApp/README.md
