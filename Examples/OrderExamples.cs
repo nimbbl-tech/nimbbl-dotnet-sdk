@@ -23,7 +23,7 @@ public static class OrderExamples
             if (string.IsNullOrWhiteSpace(invoiceId))
             {
                 // Auto-generate a unique invoice ID if user leaves it blank
-                invoiceId = $"INV-{DateTime.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid().ToString("N")[..6]}";
+                invoiceId = Helpers.GenerateInvoiceId("INV");
                 Helpers.PrintInfo($"Generated Invoice ID: {invoiceId}\n");
             }
             
@@ -74,21 +74,13 @@ public static class OrderExamples
                 ((Dictionary<string, object?>)orderData["user"]!)["last_name"] = lastName;
             }
             
-            // Generate merchant token first
-            var tokenResponse = await api.Auth().GenerateTokenAsync();
-            var merchantToken = tokenResponse.TryGetProperty("token", out var tokenProp) 
-                ? tokenProp.GetString() 
-                : null;
+            // Ask for merchant token (optional - will use cached token if not provided)
+            Helpers.PrintInfo("\nAuthentication:\n");
+            var merchantToken = Helpers.GetInput("Enter Merchant Token (optional, press Enter to use cached token): ", false);
             
-            if (string.IsNullOrWhiteSpace(merchantToken))
-            {
-                Helpers.PrintError("Failed to generate merchant token.\n");
-                return;
-            }
-            
-            api.SetBearerToken(merchantToken);
-            
-            var order = await api.Orders().CreateOrderAsync(orderData);
+            // Use the provided token if given, otherwise use cached token (from GenerateTokenAsync)
+            // The SDK will automatically use cached token if token parameter is null
+            var order = await api.Orders().CreateOrderAsync(orderData, string.IsNullOrWhiteSpace(merchantToken) ? null : merchantToken);
             
             if (order.TryGetProperty("error", out var errorProp))
             {

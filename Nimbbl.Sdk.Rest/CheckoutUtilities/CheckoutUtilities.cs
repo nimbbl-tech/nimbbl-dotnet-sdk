@@ -1,5 +1,7 @@
 using System.Text.Json;
 using Nimbbl.Sdk.Rest.Common;
+using Nimbbl.Sdk.Rest.Exception;
+using Nimbbl.Sdk.Rest.Log;
 using Nimbbl.Sdk.Rest.RestClient;
 
 namespace Nimbbl.Sdk.Rest.CheckoutUtilities;
@@ -28,22 +30,84 @@ public class CheckoutUtilities
     /// List available banks for net banking.
     /// </summary>
     /// <param name="request">Request parameters</param>
+    /// <param name="token">Optional bearer token (takes priority over cached token)</param>
     /// <returns>JSON response containing list of available banks</returns>
     /// <remarks>See <see href="https://nimbbl.biz/docs/api-reference/list-of-banks-v-3/">List Banks API</see> for more details.</remarks>
-    public Task<JsonElement> ListBanksAsync(Dictionary<string, object?> request)
+    public Task<JsonElement> ListBanksAsync(Dictionary<string, object?> request, string? token = null)
     {
-        return _apiClient.Post<Dictionary<string, object?>, JsonElement>(ApiConstants.CheckoutListBanks, request);
+        var logger = Logger.GetInstance();
+        var isEncryptEnabled = _apiClient.IsEncryptPayloadEnabled();
+        logger.DebugWithCaller($"ListBanksAsync - Encryption enabled: {isEncryptEnabled}");
+
+        if (isEncryptEnabled)
+        {
+            try
+            {
+                logger.DebugWithCaller("ListBanksAsync - Starting payload encryption");
+                var encryption = new Encryption(_apiClient.GetConfigSecret());
+                var encryptedPayload = encryption.Encrypt(request);
+
+                request = new Dictionary<string, object?>
+                {
+                    ["encrypted_payload"] = encryptedPayload
+                };
+
+                logger.InfoWithCaller("List banks payload encrypted successfully");
+            }
+            catch (System.Exception ex)
+            {
+                logger.ExceptionWithCaller($"Failed to encrypt list banks payload: {ex.Message}", ex);
+                throw new NimbblException($"Failed to encrypt list banks payload: {ex.Message}", 500, "ENCRYPTION_ERROR");
+            }
+        }
+        else
+        {
+            logger.DebugWithCaller("ListBanksAsync - Encryption disabled, sending plain payload");
+        }
+
+        return _apiClient.Post<Dictionary<string, object?>, JsonElement>(ApiConstants.CheckoutListBanks, request, token);
     }
 
     /// <summary>
     /// List available wallets for payment.
     /// </summary>
     /// <param name="request">Request parameters</param>
+    /// <param name="token">Optional bearer token (takes priority over cached token)</param>
     /// <returns>JSON response containing list of available wallets</returns>
     /// <remarks>See <see href="https://nimbbl.biz/docs/api-reference/list-of-wallets-v-3/">List Wallets API</see> for more details.</remarks>
-    public Task<JsonElement> ListWalletsAsync(Dictionary<string, object?> request)
+    public Task<JsonElement> ListWalletsAsync(Dictionary<string, object?> request, string? token = null)
     {
-        return _apiClient.Post<Dictionary<string, object?>, JsonElement>(ApiConstants.CheckoutListWallets, request);
+        var logger = Logger.GetInstance();
+        var isEncryptEnabled = _apiClient.IsEncryptPayloadEnabled();
+        logger.DebugWithCaller($"ListWalletsAsync - Encryption enabled: {isEncryptEnabled}");
+
+        if (isEncryptEnabled)
+        {
+            try
+            {
+                logger.DebugWithCaller("ListWalletsAsync - Starting payload encryption");
+                var encryption = new Encryption(_apiClient.GetConfigSecret());
+                var encryptedPayload = encryption.Encrypt(request);
+
+                request = new Dictionary<string, object?>
+                {
+                    ["encrypted_payload"] = encryptedPayload
+                };
+
+                logger.InfoWithCaller("List wallets payload encrypted successfully");
+            }
+            catch (System.Exception ex)
+            {
+                logger.ExceptionWithCaller($"Failed to encrypt list wallets payload: {ex.Message}", ex);
+                throw new NimbblException($"Failed to encrypt list wallets payload: {ex.Message}", 500, "ENCRYPTION_ERROR");
+            }
+        }
+        else
+        {
+            logger.DebugWithCaller("ListWalletsAsync - Encryption disabled, sending plain payload");
+        }
+
+        return _apiClient.Post<Dictionary<string, object?>, JsonElement>(ApiConstants.CheckoutListWallets, request, token);
     }
 
     /// <summary>

@@ -257,7 +257,7 @@ public static class ExceptionHandlingExamples
         {
             return (false, ex.Message, "nimbbl_error", ex.StatusCode > 0 ? ex.StatusCode : null);
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             return (false, "An unexpected error occurred.", "unexpected", null);
         }

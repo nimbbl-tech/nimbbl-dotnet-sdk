@@ -51,7 +51,6 @@ public static class PaymentExamples
         if (paymentMode.Equals(CheckoutConstants.PaymentModeNetBanking, StringComparison.OrdinalIgnoreCase))
         {
             Helpers.PrintInfo("Bank Code is required for net_banking payment mode.\n");
-            Console.WriteLine("   Common bank codes: HDFC, ICICI, SBI, AXIS, KOTAK, etc.\n");
             var bankCode = Helpers.GetInput("Enter Bank Code (default: HDFC): ", false) ?? "HDFC";
             data[CheckoutConstants.OptionKeyBankCode] = bankCode;
         }

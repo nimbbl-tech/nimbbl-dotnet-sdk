@@ -26,6 +26,12 @@ public class Logger
         _logFilePath = alreadyHasDateSuffix ? logFilePath : AddDateSuffixToLogFile(logFilePath);
     }
 
+    /// <summary>
+    /// Resolve the effective log file path used by the SDK (includes the date suffix).
+    /// This is idempotent: if the input already ends with _ddMMyyyy before the extension, it will not add another suffix.
+    /// </summary>
+    public static string? ResolveLogFilePath(string? logFilePath) => AddDateSuffixToLogFile(logFilePath);
+
     private static string? AddDateSuffixToLogFile(string? logFilePath)
     {
         if (string.IsNullOrWhiteSpace(logFilePath)) return logFilePath;
@@ -34,6 +40,20 @@ public class Logger
         var fileName = Path.GetFileNameWithoutExtension(logFilePath);
         var extension = Path.GetExtension(logFilePath);
         var dateSuffix = DateTime.Now.ToString("ddMMyyyy");
+
+        // If filename already ends with _ddMMyyyy, don't append again
+        // Example: nimbbl_debug_06012026.log
+        if (fileName.Length >= 9)
+        {
+            var maybeSuffix = fileName.Substring(fileName.Length - 9); // _ + 8 digits
+            if (maybeSuffix[0] == '_' && maybeSuffix.Skip(1).All(char.IsDigit))
+            {
+                var fileNameAlreadyDated = $"{fileName}{extension}";
+                return string.IsNullOrWhiteSpace(directory)
+                    ? fileNameAlreadyDated
+                    : Path.Combine(directory, fileNameAlreadyDated);
+            }
+        }
         
         var fileNameWithDate = $"{fileName}_{dateSuffix}{extension}";
         return string.IsNullOrWhiteSpace(directory) 

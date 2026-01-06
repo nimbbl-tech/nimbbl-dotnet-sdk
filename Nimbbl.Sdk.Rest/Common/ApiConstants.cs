@@ -7,19 +7,23 @@ internal static class ApiConstants
     public const string BaseUrl = "https://api.nimbbl.tech" + ApiPath;
     public const string ApiVersion = "v3";
 
+    // Shared base paths (to avoid duplication)
+    private const string AddressesBase = $"{ApiVersion}/addresses";
+    private const string PaymentLinkBase = $"{ApiVersion}/payment-link";
+
     // Orders
     public const string OrderCreate = $"{ApiVersion}/create-order";
     public const string OrderGet = $"{ApiVersion}/order";
 
     // Addresses
-    public const string AddressList = $"{ApiVersion}/addresses";
-    public const string AddressCreate = $"{ApiVersion}/addresses";
-    public const string AddressGet = $"{ApiVersion}/addresses";
-    public const string AddressUpdate = $"{ApiVersion}/addresses";
-    public const string AddressDelete = $"{ApiVersion}/addresses";
-    public const string AddressImport = $"{ApiVersion}/addresses/import";
-    public const string AddressCheckEligibility = $"{ApiVersion}/addresses/eligibility";
-    public const string AddressLinkOrder = $"{ApiVersion}/addresses/link";
+    public const string AddressList = AddressesBase;
+    public const string AddressCreate = AddressesBase;
+    public const string AddressGet = AddressesBase;
+    public const string AddressUpdate = AddressesBase;
+    public const string AddressDelete = AddressesBase;
+    public const string AddressImport = $"{AddressesBase}/import";
+    public const string AddressCheckEligibility = $"{AddressesBase}/eligibility";
+    public const string AddressLinkOrder = $"{AddressesBase}/link";
 
     // Payments
     public const string PaymentInitiate = $"{ApiVersion}/initiate-payment";
@@ -27,10 +31,10 @@ internal static class ApiConstants
     public const string PaymentResendOtp = $"{ApiVersion}/resend-otp";
 
     // Payment Links
-    public const string PaymentLinkCreate = $"{ApiVersion}/payment-link";
-    public const string PaymentLinkUpdate = $"{ApiVersion}/payment-link";
-    public const string PaymentLinkEnquiry = $"{ApiVersion}/payment-link/enquiry";
-    public const string PaymentLinkActions = $"{ApiVersion}/payment-link";
+    public const string PaymentLinkCreate = PaymentLinkBase;
+    public const string PaymentLinkUpdate = PaymentLinkBase;
+    public const string PaymentLinkEnquiry = $"{PaymentLinkBase}/enquiry";
+    public const string PaymentLinkActions = PaymentLinkBase;
 
     // Checkout Utilities
     public const string CheckoutPaymentModes = $"{ApiVersion}/payment-modes";

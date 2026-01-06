@@ -21,9 +21,9 @@ public class NimbblClient : IDisposable
     public NimbblAuth Auth { get; }
     private readonly ApiClient _apiClient;
 
-    public NimbblClient(string key, string secret, string baseUrl)
+    public NimbblClient(string key, string secret, string baseUrl, bool encryptPayload = false)
     {
-        _apiClient = new ApiClient(key, secret, baseUrl);
+        _apiClient = new ApiClient(key, secret, baseUrl, encryptPayload);
         Orders = new NimbblOrders(_apiClient);
         Transactions = new NimbblTransactions(_apiClient);
         Addresses = new NimbblAddresses(_apiClient);

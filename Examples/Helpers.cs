@@ -9,6 +9,29 @@ namespace Examples;
 /// </summary>
 public static class Helpers
 {
+    public static string GenerateInvoiceId(string? tag = "INV", string? sdkPrefixOverride = null)
+    {
+        static string Sanitize(string? s)
+        {
+            if (string.IsNullOrWhiteSpace(s)) return "NA";
+            // Keep only alphanumerics, replace others with underscore to be safe for API usage.
+            var chars = s.ToCharArray();
+            for (var i = 0; i < chars.Length; i++)
+            {
+                if (!char.IsLetterOrDigit(chars[i]))
+                    chars[i] = '_';
+            }
+            return new string(chars);
+        }
+
+        // Example: Nimbbl_NETSDK-INV-20260106104039999-1a2b3c4d5e6f
+        // Note: We intentionally avoid referencing SDK internals (e.g., SdkConstants) from Examples.
+        // Keep this stable and aligned with the logger's visible SDK label.
+        var sdkPrefix = Sanitize(string.IsNullOrWhiteSpace(sdkPrefixOverride) ? "Nimbbl_NETSDK" : sdkPrefixOverride);
+        var safeTag = Sanitize(tag);
+        return $"{sdkPrefix}-{safeTag}-{DateTime.UtcNow:yyyyMMddHHmmssfff}-{Guid.NewGuid().ToString("N")[..12]}";
+    }
+
     public static void PrintError(string message)
     {
         Console.ForegroundColor = ConsoleColor.Red;

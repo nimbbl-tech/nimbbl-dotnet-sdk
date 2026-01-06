@@ -20,7 +20,7 @@ public class NimbblApi : IDisposable
 {
     private readonly NimbblClient _client;
 
-    public NimbblApi(string key, string secret, string? baseUrl = null, string? logFilePath = null)
+    public NimbblApi(string key, string secret, string? baseUrl = null, string? logFilePath = null, bool encryptPayload = false)
     {
         var url = string.IsNullOrWhiteSpace(baseUrl) ? ApiConstants.BaseUrl : baseUrl!;
         
@@ -34,7 +34,7 @@ public class NimbblApi : IDisposable
             Logger.GetInstance(defaultLogPath);
         }
         
-        _client = new NimbblClient(key, secret, url);
+        _client = new NimbblClient(key, secret, url, encryptPayload);
     }
 
     /// <summary>
@@ -47,13 +47,15 @@ public class NimbblApi : IDisposable
     /// <param name="enableLogging">Enable SDK logging (optional, defaults to false)</param>
     /// <param name="debugLogging">Enable debug logging (optional, defaults to false)</param>
     /// <param name="logFilePath">Log file path (optional)</param>
+    /// <param name="encryptPayload">Enable encryption for request payloads (optional, defaults to false)</param>
     public static NimbblApi Initialize(
         string accessKey,
         string accessSecret,
         string? apiHost = null,
         bool? enableLogging = null,
         bool? debugLogging = null,
-        string? logFilePath = null)
+        string? logFilePath = null,
+        bool encryptPayload = false)
     {
         // Configure SDK logging
         var enableLog = enableLogging ?? false;
@@ -75,7 +77,7 @@ public class NimbblApi : IDisposable
             : $"{apiHost.TrimEnd('/')}{ApiConstants.ApiPath}";
         
         // Create NimbblApi instance from provided parameters
-        return new NimbblApi(accessKey, accessSecret, baseUrl, logFilePath);
+        return new NimbblApi(accessKey, accessSecret, baseUrl, logFilePath, encryptPayload);
     }
 
     public NimbblOrders Orders() => _client.Orders;

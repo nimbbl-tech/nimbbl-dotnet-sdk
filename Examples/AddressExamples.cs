@@ -9,6 +9,64 @@ namespace Examples;
 /// </summary>
 public static class AddressExamples
 {
+    private static async Task<JsonElement?> FindAddressByIdViaListAsync(
+        NimbblApi api,
+        string addressId,
+        string userId,
+        string token)
+    {
+        var list = await api.Addresses().ListAddressesAsync(
+            new Dictionary<string, object?> { ["user_id"] = userId },
+            token);
+
+        // List can be:
+        // - { "addresses": [ { "address": { ... }, ... }, ... ] }   (documented)
+        // - [ { "address": {..}, ... }, ... ] (provider results)
+        if (list.ValueKind == JsonValueKind.Object
+            && list.TryGetProperty("addresses", out var addressesArr)
+            && addressesArr.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var addr in addressesArr.EnumerateArray())
+            {
+                if (addr.ValueKind != JsonValueKind.Object) continue;
+
+                // Documented shape: { address: { address_id: ... }, ... }
+                if (addr.TryGetProperty("address", out var addressObj)
+                    && addressObj.ValueKind == JsonValueKind.Object
+                    && addressObj.TryGetProperty("address_id", out var aid)
+                    && aid.ValueKind == JsonValueKind.String
+                    && aid.GetString() == addressId)
+                {
+                    return addressObj.Clone();
+                }
+
+                // Fallback: sometimes address object might be flattened
+                if (addr.TryGetProperty("address_id", out var flatAid)
+                    && flatAid.ValueKind == JsonValueKind.String
+                    && flatAid.GetString() == addressId)
+                {
+                    return addr.Clone();
+                }
+            }
+        }
+        else if (list.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var item in list.EnumerateArray())
+            {
+                if (item.ValueKind != JsonValueKind.Object) continue;
+                if (item.TryGetProperty("address", out var addrObj)
+                    && addrObj.ValueKind == JsonValueKind.Object
+                    && addrObj.TryGetProperty("address_id", out var aid)
+                    && aid.ValueKind == JsonValueKind.String
+                    && aid.GetString() == addressId)
+                {
+                    return addrObj.Clone();
+                }
+            }
+        }
+
+        return null;
+    }
     /// <summary>
     /// List Addresses - Function to be called from Program.cs or standalone
     /// </summary>
@@ -32,19 +90,15 @@ public static class AddressExamples
         await DeleteAddressExample(api);
         
         Console.WriteLine();
-        Helpers.PrintStep(5, "Get Address by ID");
-        await GetAddressByIdExample(api);
-        
-        Console.WriteLine();
-        Helpers.PrintStep(6, "Import Addresses");
+        Helpers.PrintStep(5, "Import Addresses");
         await ImportAddressesExample(api);
         
         Console.WriteLine();
-        Helpers.PrintStep(7, "Check Address Eligibility");
+        Helpers.PrintStep(6, "Check Address Eligibility");
         await CheckAddressEligibilityExample(api);
         
         Console.WriteLine();
-        Helpers.PrintStep(8, "Link Address with Order");
+        Helpers.PrintStep(7, "Link Address with Order");
         await LinkAddressWithOrderExample(api);
         
         Console.WriteLine("\nFor more information, see: https://nimbbl.biz/docs/category/api-reference/addresses/\n");
@@ -60,8 +114,7 @@ public static class AddressExamples
                 Helpers.PrintError("Order Token is required.\n");
                 return;
             }
-            
-            api.SetBearerToken(token);
+            // Pass token explicitly (do not mutate global bearer token state)
             
             Dictionary<string, object?> data = [];
             
@@ -96,9 +149,9 @@ public static class AddressExamples
                 }
             }
             
-            var result = await api.Addresses().ListAddressesAsync(data);
+            var result = await api.Addresses().ListAddressesAsync(data, token);
             
-            if (result.TryGetProperty("error", out var errorProp))
+            if (result.ValueKind == JsonValueKind.Object && result.TryGetProperty("error", out var errorProp))
             {
                 Helpers.PrintError($"Error: {errorProp}\n");
             }
@@ -124,8 +177,7 @@ public static class AddressExamples
                 Helpers.PrintError("Order Token is required.\n");
                 return;
             }
-            
-            api.SetBearerToken(token);
+            // Pass token explicitly (do not mutate global bearer token state)
             
             var userId = Helpers.GetInput("Enter User ID (optional): ", false);
             Helpers.PrintInfo("Enter address details:\n");
@@ -200,9 +252,9 @@ public static class AddressExamples
             data["amount"] = !string.IsNullOrWhiteSpace(amountStr) && decimal.TryParse(amountStr, out var amt) ? amt : 5000m;
             data["currency"] = currency ?? "INR";
             
-            var result = await api.Addresses().CreateAddressAsync(data);
+            var result = await api.Addresses().CreateAddressAsync(data, token);
             
-            if (result.TryGetProperty("error", out var errorProp))
+            if (result.ValueKind == JsonValueKind.Object && result.TryGetProperty("error", out var errorProp))
             {
                 Helpers.PrintError($"Error: {errorProp}\n");
             }
@@ -228,8 +280,7 @@ public static class AddressExamples
                 Helpers.PrintError("Order Token is required.\n");
                 return;
             }
-            
-            api.SetBearerToken(token);
+            // Pass token explicitly (do not mutate global bearer token state)
             
             var addressId = Helpers.GetInput("Enter Address ID: ");
             if (string.IsNullOrWhiteSpace(addressId))
@@ -237,19 +288,163 @@ public static class AddressExamples
                 Helpers.PrintError("Address ID is required.\n");
                 return;
             }
+
+            // Use List Addresses to fetch the current address state (stable across environments).
+            // Ref: https://nimbbl.biz/docs/api-reference/list-addresses-v-3/
+            var userIdForLookup = Helpers.GetInput("Enter User ID (required): ");
+            if (string.IsNullOrWhiteSpace(userIdForLookup))
+            {
+                Helpers.PrintError("User ID is required to fetch address details via List Addresses.\n");
+                return;
+            }
             
+            // Fetch existing address first so we can send a full address object on update.
+            // Docs note: validations are as per Create Address; sending only partial fields can fail validation.
+            // Ref: https://nimbbl.biz/docs/api-reference/update-an-address-v-3/
+            Dictionary<string, object?> currentAddress;
+            try
+            {
+                var found = await FindAddressByIdViaListAsync(api, addressId, userIdForLookup!, token);
+                if (found == null)
+                    throw new Exception($"Address not found under user_id={userIdForLookup}.");
+
+                currentAddress = JsonSerializer.Deserialize<Dictionary<string, object?>>(found.Value.GetRawText())
+                                 ?? new Dictionary<string, object?>();
+            }
+            catch (AuthenticationException authEx)
+            {
+                Helpers.PrintError($"Failed to fetch existing address details: {authEx.Message}\n");
+                Helpers.PrintInfo("This API expects a valid (non-expired) order token. Create a new order to get a fresh order token, then retry.\n");
+                return;
+            }
+            catch (Exception ex)
+            {
+                Helpers.PrintError($"Failed to fetch existing address details: {ex.Message}\n");
+                return;
+            }
+
+            // Ensure address_id is present
+            currentAddress["address_id"] = addressId;
+            // Ensure user_id is present (docs include user_id inside address object)
+            currentAddress["user_id"] = userIdForLookup;
+
             Helpers.PrintInfo("Enter address fields to update (press Enter to skip)\n");
-            Dictionary<string, object?> data = [];
+            Dictionary<string, object?> updates = [];
             
-            var line1 = Helpers.GetInput("Address Line 1: ", false);
-            if (!string.IsNullOrWhiteSpace(line1)) data["address_1"] = line1;
+            var firstName = Helpers.GetInput("First Name (optional): ", false);
+            if (!string.IsNullOrWhiteSpace(firstName)) updates["first_name"] = firstName;
+
+            var lastName = Helpers.GetInput("Last Name (optional): ", false);
+            if (!string.IsNullOrWhiteSpace(lastName)) updates["last_name"] = lastName;
+
+            var line1 = Helpers.GetInput("Address Line 1 (optional): ", false);
+            if (!string.IsNullOrWhiteSpace(line1)) updates["address_1"] = line1;
             
-            var city = Helpers.GetInput("City: ", false);
-            if (!string.IsNullOrWhiteSpace(city)) data["city"] = city;
+            var street = Helpers.GetInput("Street (optional): ", false);
+            if (!string.IsNullOrWhiteSpace(street)) updates["street"] = street;
+
+            var landmark = Helpers.GetInput("Landmark (optional): ", false);
+            if (!string.IsNullOrWhiteSpace(landmark)) updates["landmark"] = landmark;
+
+            var area = Helpers.GetInput("Area/Locality (optional): ", false);
+            if (!string.IsNullOrWhiteSpace(area)) updates["area"] = area;
+
+            var city = Helpers.GetInput("City (optional): ", false);
+            if (!string.IsNullOrWhiteSpace(city)) updates["city"] = city;
+
+            var state = Helpers.GetInput("State (optional): ", false);
+            if (!string.IsNullOrWhiteSpace(state)) updates["state"] = state;
+
+            var pincode = Helpers.GetInput("Pincode (optional): ", false);
+            if (!string.IsNullOrWhiteSpace(pincode)) updates["pincode"] = pincode;
+
+            var addressType = Helpers.GetInput("Address Type (home/office/etc, optional): ", false);
+            if (!string.IsNullOrWhiteSpace(addressType)) updates["address_type"] = addressType;
+
+            var label = Helpers.GetInput("Label (optional): ", false);
+            if (!string.IsNullOrWhiteSpace(label)) updates["label"] = label;
+
+            var linkAs = Helpers.GetInput("Link As (shipping/billing, optional): ", false);
+            if (!string.IsNullOrWhiteSpace(linkAs))
+            {
+                var la = linkAs.Trim().ToLowerInvariant();
+                if (la is "shipping" or "billing")
+                {
+                    updates["link_as"] = la;
+                }
+                else
+                {
+                    Helpers.PrintWarning("Invalid link_as. Allowed values: shipping, billing. Skipping.\n");
+                }
+            }
+
+            if (updates.Count == 0)
+            {
+                Helpers.PrintError("At least one field must be provided for update.\n");
+                return;
+            }
+
+            // Merge updates into current address object
+            foreach (var kv in updates)
+            {
+                currentAddress[kv.Key] = kv.Value;
+            }
+
+            // Shipping calculation fields (docs include these in the address object)
+            // Some environments return PAYMENT_INFORMATION_MISSING if these are omitted.
+            var amountStr = Helpers.GetInput("Order Amount (for shipping calculation, default: 5000): ", false);
+            currentAddress["amount"] = !string.IsNullOrWhiteSpace(amountStr) && decimal.TryParse(amountStr, out var amount) ? amount : 5000m;
+
+            var currency = Helpers.GetInput("Currency (ISO-4217, default: INR): ", false);
+            currentAddress["currency"] = string.IsNullOrWhiteSpace(currency) ? "INR" : currency.Trim().ToUpperInvariant();
+
+            // Sanitize payload: only include fields documented for Update Address.
+            // Avoid sending read-only/provider fields like source/last_used_at.
+            var allowedKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                "first_name",
+                "last_name",
+                "address_id",
+                "address_1",
+                "street",
+                "landmark",
+                "area",
+                "city",
+                "state",
+                "pincode",
+                "address_type",
+                "label",
+                "user_id",
+                "amount",
+                "currency",
+                "link_as"
+            };
+
+            var sanitizedAddress = new Dictionary<string, object?>();
+            foreach (var kv in currentAddress)
+            {
+                if (!allowedKeys.Contains(kv.Key)) continue;
+                if (kv.Value == null) continue; // omit nulls
+                sanitizedAddress[kv.Key] = kv.Value;
+            }
+
+            // Confirm before sending request (avoid accidental submits)
+            Helpers.PrintInfo("\nUpdate payload preview:\n");
+            var payloadPreview = new Dictionary<string, object?>
+            {
+                ["address"] = sanitizedAddress
+            };
+            Console.WriteLine(JsonSerializer.Serialize(payloadPreview, new JsonSerializerOptions { WriteIndented = true }));
+            var proceed = Helpers.GetInput("\nProceed with update? (y/N): ", false);
+            if (string.IsNullOrWhiteSpace(proceed) || !proceed.Trim().Equals("y", StringComparison.OrdinalIgnoreCase))
+            {
+                Helpers.PrintInfo("Update cancelled.\n");
+                return;
+            }
             
-            var result = await api.Addresses().UpdateAddressAsync(addressId, data);
+            var result = await api.Addresses().UpdateAddressAsync(addressId, payloadPreview, token);
             
-            if (result.TryGetProperty("error", out var errorProp))
+            if (result.ValueKind == JsonValueKind.Object && result.TryGetProperty("error", out var errorProp))
             {
                 Helpers.PrintError($"Error: {errorProp}\n");
             }
@@ -275,8 +470,7 @@ public static class AddressExamples
                 Helpers.PrintError("Order Token is required.\n");
                 return;
             }
-            
-            api.SetBearerToken(token);
+            // Pass token explicitly (do not mutate global bearer token state)
             
             var addressId = Helpers.GetInput("Enter Address ID: ");
             if (string.IsNullOrWhiteSpace(addressId))
@@ -285,9 +479,9 @@ public static class AddressExamples
                 return;
             }
             
-            var result = await api.Addresses().DeleteAddressAsync(addressId);
+            var result = await api.Addresses().DeleteAddressAsync(addressId, token);
             
-            if (result.TryGetProperty("error", out var errorProp))
+            if (result.ValueKind == JsonValueKind.Object && result.TryGetProperty("error", out var errorProp))
             {
                 Helpers.PrintError($"Error: {errorProp}\n");
             }
@@ -302,43 +496,8 @@ public static class AddressExamples
         }
     }
 
-    public static async Task GetAddressByIdExample(NimbblApi api)
-    {
-        try
-        {
-            var token = Helpers.GetInput("Enter Order Token: ", false);
-            if (string.IsNullOrWhiteSpace(token))
-            {
-                Helpers.PrintError("Order Token is required.\n");
-                return;
-            }
-            
-            api.SetBearerToken(token);
-            
-            var addressId = Helpers.GetInput("Enter Address ID: ");
-            if (string.IsNullOrWhiteSpace(addressId))
-            {
-                Helpers.PrintError("Address ID is required.\n");
-                return;
-            }
-            
-            var result = await api.Addresses().GetAddressByIdAsync(addressId);
-            
-            if (result.TryGetProperty("error", out var errorProp))
-            {
-                Helpers.PrintError($"Error: {errorProp}\n");
-            }
-            else
-            {
-                Helpers.PrintSuccess("Address retrieved successfully!\n");
-                Console.WriteLine(JsonSerializer.Serialize(result, new JsonSerializerOptions { WriteIndented = true }));
-            }
-        }
-        catch (Exception ex)
-        {
-            Helpers.PrintException(ex);
-        }
-    }
+    // NOTE: There is no "Get Address by ID" option in the public docs.
+    // Use ListAddressesExample and filter by address_id if needed.
 
     public static async Task ImportAddressesExample(NimbblApi api)
     {
@@ -350,8 +509,7 @@ public static class AddressExamples
                 Helpers.PrintError("Order Token is required.\n");
                 return;
             }
-            
-            api.SetBearerToken(token);
+            // Pass token explicitly (do not mutate global bearer token state)
             
             Helpers.PrintInfo("Import addresses from a provider (e.g., shiprocket)\n");
             Helpers.PrintInfo("This is a two-step process:\n");
@@ -402,9 +560,9 @@ public static class AddressExamples
                 return;
             }
             
-            var result = await api.Addresses().ImportAddressesAsync(importData);
+            var result = await api.Addresses().ImportAddressesAsync(importData, token);
             
-            if (result.TryGetProperty("error", out var errorProp))
+            if (result.ValueKind == JsonValueKind.Object && result.TryGetProperty("error", out var errorProp))
             {
                 Helpers.PrintError($"Error: {errorProp}\n");
             }
@@ -454,8 +612,7 @@ public static class AddressExamples
                 Helpers.PrintError("Order Token is required.\n");
                 return;
             }
-            
-            api.SetBearerToken(token);
+            // Pass token explicitly (do not mutate global bearer token state)
             
             Helpers.PrintInfo("Enter eligibility check details:\n");
             var pincode = Helpers.GetInput("Pincode (required): ");
@@ -485,9 +642,9 @@ public static class AddressExamples
                 data["currency"] = currency;
             }
             
-            var result = await api.Addresses().CheckAddressEligibilityAsync(data);
+            var result = await api.Addresses().CheckAddressEligibilityAsync(data, token);
             
-            if (result.TryGetProperty("error", out var errorProp))
+            if (result.ValueKind == JsonValueKind.Object && result.TryGetProperty("error", out var errorProp))
             {
                 Helpers.PrintError($"Error: {errorProp}\n");
             }
@@ -527,8 +684,7 @@ public static class AddressExamples
                 Helpers.PrintError("Order Token is required.\n");
                 return;
             }
-            
-            api.SetBearerToken(token);
+            // Pass token explicitly (do not mutate global bearer token state)
             
             var addressId = Helpers.GetInput("Enter Address ID (required): ");
             if (string.IsNullOrWhiteSpace(addressId))
@@ -563,9 +719,9 @@ public static class AddressExamples
                 linkData["order_id"] = orderId;
             }
             
-            var result = await api.Addresses().LinkAddressWithOrderAsync(linkData);
+            var result = await api.Addresses().LinkAddressWithOrderAsync(linkData, token);
             
-            if (result.TryGetProperty("error", out var errorProp))
+            if (result.ValueKind == JsonValueKind.Object && result.TryGetProperty("error", out var errorProp))
             {
                 Helpers.PrintError($"Error: {errorProp}\n");
             }

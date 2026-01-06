@@ -19,6 +19,7 @@ public static class ServiceCollectionExtensions
     /// <param name="enableLogging">Enable SDK logging (optional, defaults to false)</param>
     /// <param name="debugLogging">Enable debug logging (optional, defaults to false)</param>
     /// <param name="logFilePath">Log file path (optional)</param>
+    /// <param name="encryptPayload">Enable encryption for request payloads (optional, defaults to false)</param>
     /// <returns>The service collection for chaining</returns>
     public static IServiceCollection AddNimbbl(
         this IServiceCollection services,
@@ -27,7 +28,8 @@ public static class ServiceCollectionExtensions
         string? apiHost = null,
         bool? enableLogging = null,
         bool? debugLogging = null,
-        string? logFilePath = null)
+        string? logFilePath = null,
+        bool encryptPayload = false)
     {
         // Initialize NimbblApi from provided parameters
         var api = NimbblApi.Initialize(
@@ -36,7 +38,8 @@ public static class ServiceCollectionExtensions
             apiHost: apiHost,
             enableLogging: enableLogging,
             debugLogging: debugLogging,
-            logFilePath: logFilePath);
+            logFilePath: logFilePath,
+            encryptPayload: encryptPayload);
         
         // Register NimbblApi as singleton
         services.AddSingleton(api);

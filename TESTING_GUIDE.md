@@ -77,7 +77,7 @@ cd /path/to/nimbbl-dotnet-sdk
 
    ```xml
    <ItemGroup>
-     <PackageReference Include="Nimbbl.Sdk.Rest" Version="1.3.5-rc2" />
+    <PackageReference Include="Nimbbl.Sdk.Rest" Version="1.3.5-rc3" />
    </ItemGroup>
    ```
 
@@ -297,7 +297,7 @@ cd /path/to/nimbbl-dotnet-sdk
 
    ```xml
    <ItemGroup>
-     <PackageReference Include="Nimbbl.Sdk.Rest" Version="1.3.5-rc2" />
+    <PackageReference Include="Nimbbl.Sdk.Rest" Version="1.3.5-rc3" />
    </ItemGroup>
    ```
 
@@ -696,7 +696,7 @@ dotnet restore
 
 # Verify project reference in .csproj file
 # For local source: Should have <ProjectReference Include="..\Nimbbl.Sdk.Rest\Nimbbl.Sdk.Rest.csproj" />
-# For NuGet: Should have <PackageReference Include="Nimbbl.Sdk.Rest" Version="1.3.5-rc2" />
+# For NuGet: Should have <PackageReference Include="Nimbbl.Sdk.Rest" Version="1.3.5-rc3" />
 ```
 
 #### 7. NuGet Package Not Found
@@ -789,4 +789,4 @@ If you encounter issues not covered here:
 ---
 
 **Last Updated:** January 2025  
-**SDK Version:** 1.3.5-rc2
+**SDK Version:** 1.3.5-rc3

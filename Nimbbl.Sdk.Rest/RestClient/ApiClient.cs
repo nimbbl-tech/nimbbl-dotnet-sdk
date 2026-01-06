@@ -19,6 +19,7 @@ internal class ApiClient : IDisposable
     private readonly HttpClient _client;
     private readonly string _key;
     private readonly string _secret;
+    private readonly bool _encryptPayload;
         private readonly Dictionary<string, string> _defaultHeaders = new(StringComparer.OrdinalIgnoreCase);
         private string? _explicitBearerToken;
         private DateTime? _explicitTokenExpiryUtc;
@@ -38,10 +39,20 @@ internal class ApiClient : IDisposable
     /// </summary>
     internal string GetConfigSecret() => _secret;
     
-    public ApiClient(string key, string secret, string baseUrl)
+    /// <summary>
+    /// Gets whether payload encryption is enabled
+    /// </summary>
+    internal bool IsEncryptPayloadEnabled() => _encryptPayload;
+    
+    public ApiClient(string key, string secret, string baseUrl, bool encryptPayload = false)
     {
         _key = key;
         _secret = secret;
+        _encryptPayload = encryptPayload;
+        
+        // Log encryption flag status for debugging
+        var logger = Logger.GetInstance();
+        logger.DebugWithCaller($"ApiClient initialized - encryptPayload: {_encryptPayload}");
         _serializerOptions = new(JsonSerializerDefaults.Web)
         {
             AllowTrailingCommas = true,
@@ -62,53 +73,69 @@ internal class ApiClient : IDisposable
     /// <summary>
     /// Sends a GET request to the specified URI
     /// </summary>
-    public async Task<TResponse> Get<TResponse>(string requestUri)
+    /// <param name="requestUri">Request URI</param>
+    /// <param name="token">Optional bearer token (takes priority over cached token)</param>
+    public async Task<TResponse> Get<TResponse>(string requestUri, string? token = null)
     {
-        return await ExecuteRequestAsync<TResponse>(CreateRequest(HttpMethod.Get, requestUri));
+        return await ExecuteRequestAsync<TResponse>(CreateRequest(HttpMethod.Get, requestUri), token);
     }
 
     /// <summary>
     /// Sends a GET request with query parameters
     /// </summary>
-    public async Task<TResponse> Get<TResponse>(string requestUri, Dictionary<string, object?>? queryParams)
+    /// <param name="requestUri">Request URI</param>
+    /// <param name="queryParams">Query parameters</param>
+    /// <param name="token">Optional bearer token (takes priority over cached token)</param>
+    public async Task<TResponse> Get<TResponse>(string requestUri, Dictionary<string, object?>? queryParams, string? token = null)
     {
         var uri = BuildQueryString(requestUri, queryParams);
-        return await ExecuteRequestAsync<TResponse>(CreateRequest(HttpMethod.Get, uri));
+        return await ExecuteRequestAsync<TResponse>(CreateRequest(HttpMethod.Get, uri), token);
     }
 
     /// <summary>
     /// Sends a POST request with a request body
     /// </summary>
-    public async Task<TResponse> Post<TRequest, TResponse>(string requestUri, TRequest body)
+    /// <param name="requestUri">Request URI</param>
+    /// <param name="body">Request body</param>
+    /// <param name="token">Optional bearer token (takes priority over cached token)</param>
+    public async Task<TResponse> Post<TRequest, TResponse>(string requestUri, TRequest body, string? token = null)
         where TRequest : class
     {
-        return await ExecuteRequestAsync<TResponse>(CreateRequest(HttpMethod.Post, requestUri, body));
+        return await ExecuteRequestAsync<TResponse>(CreateRequest(HttpMethod.Post, requestUri, body), token);
     }
 
     /// <summary>
     /// Sends a PATCH request with a request body
     /// </summary>
-    public async Task<TResponse> Patch<TRequest, TResponse>(string requestUri, TRequest body)
+    /// <param name="requestUri">Request URI</param>
+    /// <param name="body">Request body</param>
+    /// <param name="token">Optional bearer token (takes priority over cached token)</param>
+    public async Task<TResponse> Patch<TRequest, TResponse>(string requestUri, TRequest body, string? token = null)
         where TRequest : class
     {
-        return await ExecuteRequestAsync<TResponse>(CreateRequest(HttpMethod.Patch, requestUri, body));
+        return await ExecuteRequestAsync<TResponse>(CreateRequest(HttpMethod.Patch, requestUri, body), token);
     }
 
     /// <summary>
     /// Sends a DELETE request to the specified URI
     /// </summary>
-    public async Task<TResponse> Delete<TResponse>(string requestUri)
+    /// <param name="requestUri">Request URI</param>
+    /// <param name="token">Optional bearer token (takes priority over cached token)</param>
+    public async Task<TResponse> Delete<TResponse>(string requestUri, string? token = null)
     {
-        return await ExecuteRequestAsync<TResponse>(CreateRequest(HttpMethod.Delete, requestUri));
+        return await ExecuteRequestAsync<TResponse>(CreateRequest(HttpMethod.Delete, requestUri), token);
     }
 
     /// <summary>
     /// Sends a DELETE request with query parameters
     /// </summary>
-    public async Task<TResponse> Delete<TResponse>(string requestUri, Dictionary<string, object?>? queryParams)
+    /// <param name="requestUri">Request URI</param>
+    /// <param name="queryParams">Query parameters</param>
+    /// <param name="token">Optional bearer token (takes priority over cached token)</param>
+    public async Task<TResponse> Delete<TResponse>(string requestUri, Dictionary<string, object?>? queryParams, string? token = null)
     {
         var uri = BuildQueryString(requestUri, queryParams);
-        return await ExecuteRequestAsync<TResponse>(CreateRequest(HttpMethod.Delete, uri));
+        return await ExecuteRequestAsync<TResponse>(CreateRequest(HttpMethod.Delete, uri), token);
     }
 
     /// <summary>
@@ -133,14 +160,16 @@ internal class ApiClient : IDisposable
     /// <summary>
     /// Executes an HTTP request with logging, retry logic, and error handling
     /// </summary>
-    private async Task<TResponse> ExecuteRequestAsync<TResponse>(HttpRequestMessage message)
+    /// <param name="message">HTTP request message</param>
+    /// <param name="token">Optional bearer token (takes priority over cached token)</param>
+    private async Task<TResponse> ExecuteRequestAsync<TResponse>(HttpRequestMessage message, string? token = null)
     {
         // Get caller info from request log to reuse for response log
         var callerInfo = await LogRequestAsync(message);
         HttpResponseMessage httpResponse;
         try
         {
-            httpResponse = await RetryRequestAsync(SendRequestAsync, message, 1);
+            httpResponse = await RetryRequestAsync(async (req, ci, tok) => await SendRequestAsync(req, ci, tok), message, 1, callerInfo, token);
         }
         catch (System.Exception ex)
         {
@@ -190,6 +219,49 @@ internal class ApiClient : IDisposable
             logger.DebugWithCaller("Response body is NULL", callerInfo);
         }
         
+        // Check if response contains encrypted_response and decrypt it if needed
+        if (httpResponse.IsSuccessStatusCode && !string.IsNullOrWhiteSpace(responseBody))
+        {
+            try
+            {
+                using var responseDoc = JsonDocument.Parse(responseBody);
+                var responseRoot = responseDoc.RootElement;
+                
+                // Check if response contains encrypted_response field
+                if (responseRoot.TryGetProperty("encrypted_response", out var encryptedResponseProp) 
+                    && encryptedResponseProp.ValueKind == JsonValueKind.String)
+                {
+                    var encryptedResponse = encryptedResponseProp.GetString();
+                    if (!string.IsNullOrWhiteSpace(encryptedResponse))
+                    {
+                        try
+                        {
+                            // Decrypt the encrypted response
+                            var encryption = new Encryption(_secret);
+                            var decryptedJson = encryption.Decrypt(encryptedResponse, true);
+                            responseBody = decryptedJson;
+                            
+                            var logger = Logger.GetInstance();
+                            logger.InfoWithCaller("Successfully decrypted encrypted response", callerInfo);
+                            
+                            // Update the content with decrypted response
+                            httpResponse.Content = new StringContent(responseBody, System.Text.Encoding.UTF8, "application/json");
+                        }
+                        catch (System.Exception decryptEx)
+                        {
+                            var logger = Logger.GetInstance();
+                            logger.ExceptionWithCaller($"Failed to decrypt encrypted response: {decryptEx.Message}", decryptEx, callerInfo);
+                            // Continue with original responseBody - let deserialization handle it
+                        }
+                    }
+                }
+            }
+            catch (JsonException)
+            {
+                // If JSON parsing fails, continue with original responseBody
+            }
+        }
+        
         // Attempt deserialization with error handling
         if (httpResponse.Content == null)
         {
@@ -226,7 +298,7 @@ internal class ApiClient : IDisposable
                 {
                     errorMsg += "\n\nResponse body was NULL";
                 }
-                logger.ErrorWithCaller(errorMsg);
+                logger.ErrorWithCaller(errorMsg, callerInfo);
             }
             catch
             {
@@ -259,12 +331,12 @@ internal class ApiClient : IDisposable
     /// <summary>
     /// Retries a request if it fails, with automatic token refresh on auth failures
     /// </summary>
-    private async Task<HttpResponseMessage> RetryRequestAsync(Func<HttpRequestMessage, Task<HttpResponseMessage>> sendRequest, HttpRequestMessage message, ushort retryCount)
+    private async Task<HttpResponseMessage> RetryRequestAsync(Func<HttpRequestMessage, (string Module, string Function, int Line)?, string?, Task<HttpResponseMessage>> sendRequest, HttpRequestMessage message, ushort retryCount, (string Module, string Function, int Line)? callerInfo = null, string? token = null)
     {
         HttpResponseMessage response;
         do
         {
-            response = await sendRequest(CloneRequest(message));
+            response = await sendRequest(CloneRequest(message), callerInfo, token);
             if (response.IsSuccessStatusCode) 
             {
                 return response;
@@ -275,7 +347,7 @@ internal class ApiClient : IDisposable
                 _tokenDoc = null;
             }
         } while (retryCount-- != 0);
-        await HandleErrorResponseAsync(response);
+        await HandleErrorResponseAsync(response, callerInfo);
         return response;
     }
 
@@ -290,14 +362,68 @@ internal class ApiClient : IDisposable
     /// <summary>
     /// Handles error responses by parsing error messages and throwing appropriate exceptions
     /// </summary>
-    private static async Task HandleErrorResponseAsync(HttpResponseMessage httpResponse)
+    private async Task HandleErrorResponseAsync(HttpResponseMessage httpResponse, (string Module, string Function, int Line)? callerInfo = null)
     {
         var errorText = await httpResponse.Content.ReadAsStringAsync();
         
         // Log the error response (masked unless debug is enabled) - CentralMasker is ONLY used for logging
         var logger = Logger.GetInstance();
         var logText = Logger.IsDebugEnabled() ? errorText : CentralMasker.MaskBody(errorText);
-        logger.ErrorWithCaller($"HTTP {httpResponse.StatusCode}: {logText}");
+        logger.ErrorWithCaller($"HTTP {httpResponse.StatusCode}: {logText}", callerInfo);
+        
+        // Check if error response is encrypted and decrypt if needed
+        if (IsValidJson(errorText))
+        {
+            try
+            {
+                using var errorDoc = JsonDocument.Parse(errorText);
+                var errorRoot = errorDoc.RootElement;
+                
+                // Check if response contains encrypted_response field
+                if (errorRoot.TryGetProperty("encrypted_response", out var encryptedResponseProp) 
+                    && encryptedResponseProp.ValueKind == JsonValueKind.String)
+                {
+                    var encryptedResponse = encryptedResponseProp.GetString();
+                    if (!string.IsNullOrWhiteSpace(encryptedResponse))
+                    {
+                        try
+                        {
+                            // Decrypt the encrypted error response
+                            var encryption = new Encryption(_secret);
+                            var decryptedJson = encryption.Decrypt(encryptedResponse, true);
+                            errorText = decryptedJson;
+                            
+                            logger.InfoWithCaller("Successfully decrypted encrypted error response", callerInfo);
+                            
+                            // Re-parse the decrypted JSON
+                            errorDoc.Dispose();
+                            using var decryptedDoc = JsonDocument.Parse(errorText);
+                            var decryptedRoot = decryptedDoc.RootElement;
+                            
+                            // Try to get error object from decrypted response
+                            if (decryptedRoot.TryGetProperty(ErrorMessages.ResponseKeyError, out var errorObj))
+                            {
+                                var merchantMessage = errorObj.TryGetProperty(ErrorMessages.ErrorKeyMerchantMessage, out var mm) ? mm.GetString() : null;
+                                var consumerMessage = errorObj.TryGetProperty(ErrorMessages.ErrorKeyConsumerMessage, out var cm) ? cm.GetString() : null;
+                                var errorCode = errorObj.TryGetProperty(ErrorMessages.ErrorKeyErrorCode, out var ec) ? ec.GetString() : null;
+                                
+                                var message = merchantMessage ?? consumerMessage ?? errorCode ?? ErrorMessages.MessageApiRequestFailed;
+                                throw MapException(httpResponse.StatusCode, message, errorCode ?? ErrorCodes.ServerError);
+                            }
+                        }
+                        catch (System.Exception decryptEx)
+                        {
+                            logger.ExceptionWithCaller($"Failed to decrypt encrypted error response: {decryptEx.Message}", decryptEx, callerInfo);
+                            // Fall through to handle as regular error
+                        }
+                    }
+                }
+            }
+            catch (JsonException)
+            {
+                // If JSON parsing fails, continue with original errorText
+            }
+        }
         
         // Use unmasked errorText for exceptions (exceptions are not logging)
         if (!IsValidJson(errorText)) throw MapException(httpResponse.StatusCode, errorText, ErrorCodes.ServerError);
@@ -369,34 +495,52 @@ internal class ApiClient : IDisposable
     /// <summary>
     /// Sends an HTTP request with automatic authorization
     /// </summary>
-    private async Task<HttpResponseMessage> SendRequestAsync(HttpRequestMessage request)
+    private async Task<HttpResponseMessage> SendRequestAsync(HttpRequestMessage request, (string Module, string Function, int Line)? callerInfo = null, string? token = null)
     {
         try
         {
-            await LazyAuthorizeRequestAsync(request);
+            await LazyAuthorizeRequestAsync(request, token);
             var response = await _client.SendAsync(request);
             return response;
         }
         catch (System.Exception ex)
         {
             var logger = Logger.GetInstance();
-            logger.ExceptionWithCaller("SendRequestAsync failed", ex);
+            logger.ExceptionWithCaller("SendRequestAsync failed", ex, callerInfo);
             throw;
         }
     }
 
     /// <summary>
-    /// Lazily authorizes the request by setting bearer token (cached or newly generated)
+    /// Lazily authorizes the request by setting bearer token (cached or explicitly set)
+    /// Priority: 1. Passed token (parameter) > 2. Explicit bearer token > 3. Cached token
+    /// Note: Token must be generated first using Auth().GenerateTokenAsync() or provided as parameter
+    /// Note: generate-token endpoint doesn't require authentication (uses access_key/access_secret in body)
     /// </summary>
-    private async Task LazyAuthorizeRequestAsync(HttpRequestMessage request)
+    private Task LazyAuthorizeRequestAsync(HttpRequestMessage request, string? token = null)
     {
-            // Prefer explicitly set bearer token if valid (or no expiry provided)
+            // Check if this is the generate-token endpoint - it doesn't require bearer token authentication
+            var requestUri = request.RequestUri?.ToString() ?? "";
+            if (requestUri.Contains(ApiConstants.AuthGenerateToken, StringComparison.OrdinalIgnoreCase))
+            {
+                // Generate token endpoint uses access_key/access_secret in body, no bearer token needed
+                return Task.CompletedTask;
+            }
+            
+            // Priority 1: Token passed as parameter (highest priority)
+            if (!string.IsNullOrWhiteSpace(token))
+            {
+                request.Headers.Authorization = new("Bearer", token);
+                return Task.CompletedTask;
+            }
+            
+            // Priority 2: Explicitly set bearer token if valid (or no expiry provided)
             if (!string.IsNullOrEmpty(_explicitBearerToken))
             {
                 if (_explicitTokenExpiryUtc == null || DateTime.UtcNow < _explicitTokenExpiryUtc.Value)
                 {
                     request.Headers.Authorization = new("Bearer", _explicitBearerToken);
-                    return;
+                    return Task.CompletedTask;
                 }
             }
 
@@ -404,7 +548,7 @@ internal class ApiClient : IDisposable
             bool isValid = false;
             if (_tokenDoc != null && Token.ValueKind == JsonValueKind.Object)
             {
-                var tokenValue = Token.TryGetProperty("token", out var tokenProp) ? tokenProp.GetString() : null;
+                var tokenValue = Token.TryGetProperty("token", out var cachedTokenProp) ? cachedTokenProp.GetString() : null;
                 if (!string.IsNullOrEmpty(tokenValue))
                 {
                     // Check expiration
@@ -427,20 +571,21 @@ internal class ApiClient : IDisposable
                 }
             }
             
+            // If no valid cached token exists, throw error instead of auto-generating
             if (!isValid)
             {
                 _tokenDoc?.Dispose();
-                var tokenElement = await _authenticationService.Authenticate();
-                // Create a new JsonDocument from the element's raw text
-                _tokenDoc = JsonDocument.Parse(tokenElement.GetRawText());
+                _tokenDoc = null;
+                return Task.FromException(new ApplicationException("No valid token available. Please generate a token first using Auth().GenerateTokenAsync() or provide a token parameter."));
             }
             
-            var tokenString = Token.TryGetProperty("token", out var token) ? token.GetString() : null;
+            var tokenString = Token.TryGetProperty("token", out var finalTokenProp) ? finalTokenProp.GetString() : null;
             if (string.IsNullOrEmpty(tokenString))
             {
-            throw new ApplicationException(ErrorMessages.MessageTokenMissing);
+                return Task.FromException(new ApplicationException(ErrorMessages.MessageTokenMissing));
             }
             request.Headers.Authorization = new("Bearer", tokenString);
+            return Task.CompletedTask;
     }
 
 

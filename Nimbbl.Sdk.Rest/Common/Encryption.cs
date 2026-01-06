@@ -1,6 +1,9 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Org.BouncyCastle.Crypto.Engines;
+using Org.BouncyCastle.Crypto.Modes;
+using Org.BouncyCastle.Crypto.Parameters;
 using Nimbbl.Sdk.Rest.Exception;
 using Nimbbl.Sdk.Rest.Log;
 
@@ -8,11 +11,12 @@ namespace Nimbbl.Sdk.Rest.Common;
 
 /// <summary>
 /// Encryption helper implementing AES-GCM Encryption/Decryption as per Nimbbl API documentation.
+/// Uses BouncyCastle library for full 16-byte nonce support (required by Nimbbl specification).
 /// </summary>
 public class Encryption
 {
-    private const int GCM_TAG_LENGTH = 16;
-    private const int GCM_NONCE_LENGTH = 16;
+    private const int GCM_TAG_LENGTH = 16; // 16 bytes = 128 bits (authentication tag)
+    private const int GCM_NONCE_LENGTH = 16; // Nimbbl spec uses 16 bytes for nonce
     
     private readonly byte[] _encryptionKey;
     private readonly int _keyIterations;
@@ -83,7 +87,7 @@ public class Encryption
                 );
             }
 
-            // Extract nonce (first 16 bytes)
+            // Extract nonce (first 16 bytes per Nimbbl spec)
             var nonce = new byte[GCM_NONCE_LENGTH];
             Array.Copy(encryptedBytes, 0, nonce, 0, GCM_NONCE_LENGTH);
             logger.DebugWithCaller($"Encryption::decrypt() - Extracted nonce, length: {nonce.Length}");
@@ -99,14 +103,23 @@ public class Encryption
             Array.Copy(encryptedBytes, GCM_NONCE_LENGTH, ciphertext, 0, ciphertextLength);
             logger.DebugWithCaller($"Encryption::decrypt() - Extracted ciphertext, length: {ciphertext.Length}");
 
-            // Decrypt with AES-256-GCM
-            logger.DebugWithCaller("Encryption::decrypt() - Decrypting with AES-256-GCM");
+            // Decrypt with AES-256-GCM using BouncyCastle (supports 16-byte nonce)
+            logger.DebugWithCaller("Encryption::decrypt() - Decrypting with AES-256-GCM using BouncyCastle");
             byte[] plaintext;
-            using (var aesGcm = new AesGcm(_encryptionKey, GCM_TAG_LENGTH))
-            {
-                plaintext = new byte[ciphertextLength];
-                aesGcm.Decrypt(nonce, ciphertext, tag, plaintext);
-            }
+            
+            var cipher = new GcmBlockCipher(new AesEngine());
+            var keyParam = new KeyParameter(_encryptionKey);
+            var parameters = new AeadParameters(keyParam, GCM_TAG_LENGTH * 8, nonce);
+            cipher.Init(false, parameters); // false = decrypt mode
+            
+            // Combine ciphertext and tag for BouncyCastle (it expects them together)
+            var ciphertextWithTag = new byte[ciphertext.Length + tag.Length];
+            Array.Copy(ciphertext, 0, ciphertextWithTag, 0, ciphertext.Length);
+            Array.Copy(tag, 0, ciphertextWithTag, ciphertext.Length, tag.Length);
+            
+            plaintext = new byte[cipher.GetOutputSize(ciphertextWithTag.Length)];
+            var len = cipher.ProcessBytes(ciphertextWithTag, 0, ciphertextWithTag.Length, plaintext, 0);
+            cipher.DoFinal(plaintext, len);
 
             logger.DebugWithCaller($"Encryption::decrypt() - Decryption successful, plaintext length: {plaintext.Length}");
 
@@ -168,7 +181,7 @@ public class Encryption
 
             var plaintextBytes = Encoding.UTF8.GetBytes(plaintext);
 
-            // Generate random nonce (IV)
+            // Generate random nonce (IV) - 16 bytes as per Nimbbl specification
             var nonce = new byte[GCM_NONCE_LENGTH];
             using (var rng = RandomNumberGenerator.Create())
             {
@@ -176,19 +189,29 @@ public class Encryption
             }
             logger.DebugWithCaller($"Encryption::encrypt() - Generated random nonce, length: {nonce.Length}");
 
-            // Encrypt with AES-256-GCM
-            logger.DebugWithCaller($"Encryption::encrypt() - Encrypting with AES-256-GCM, plaintext length: {plaintextBytes.Length}");
-            var ciphertext = new byte[plaintextBytes.Length];
-            var tag = new byte[GCM_TAG_LENGTH];
+            // Encrypt with AES-256-GCM using BouncyCastle (supports 16-byte nonce)
+            logger.DebugWithCaller($"Encryption::encrypt() - Encrypting with AES-256-GCM using BouncyCastle, plaintext length: {plaintextBytes.Length}");
             
-            using (var aesGcm = new AesGcm(_encryptionKey, GCM_TAG_LENGTH))
-            {
-                aesGcm.Encrypt(nonce, plaintextBytes, ciphertext, tag);
-            }
+            var cipher = new GcmBlockCipher(new AesEngine());
+            var keyParam = new KeyParameter(_encryptionKey);
+            var parameters = new AeadParameters(keyParam, GCM_TAG_LENGTH * 8, nonce);
+            cipher.Init(true, parameters); // true = encrypt mode
+            
+            var encrypted = new byte[cipher.GetOutputSize(plaintextBytes.Length)];
+            var len = cipher.ProcessBytes(plaintextBytes, 0, plaintextBytes.Length, encrypted, 0);
+            cipher.DoFinal(encrypted, len);
+            
+            logger.DebugWithCaller($"Encryption::encrypt() - Encryption successful, encrypted data length: {encrypted.Length}");
 
-            logger.DebugWithCaller($"Encryption::encrypt() - Encryption successful, ciphertext length: {ciphertext.Length}");
+            // BouncyCastle returns ciphertext + tag together
+            // We need to separate them: ciphertext is all but last 16 bytes, tag is last 16 bytes
+            var ciphertextLength = encrypted.Length - GCM_TAG_LENGTH;
+            var ciphertext = new byte[ciphertextLength];
+            var tag = new byte[GCM_TAG_LENGTH];
+            Array.Copy(encrypted, 0, ciphertext, 0, ciphertextLength);
+            Array.Copy(encrypted, ciphertextLength, tag, 0, GCM_TAG_LENGTH);
 
-            // Concatenate: nonce + ciphertext + tag
+            // Concatenate: nonce (16 bytes) + ciphertext + tag (16 bytes) as per Nimbbl spec
             var encryptedData = new byte[nonce.Length + ciphertext.Length + tag.Length];
             Array.Copy(nonce, 0, encryptedData, 0, nonce.Length);
             Array.Copy(ciphertext, 0, encryptedData, nonce.Length, ciphertext.Length);

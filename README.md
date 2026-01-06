@@ -362,7 +362,7 @@ Nimbbl.Sdk.Rest/
 
 ## Version
 
-Current Version: 1.3.5-rc2
+Current Version: 1.3.5-rc3
 
 ## License
 

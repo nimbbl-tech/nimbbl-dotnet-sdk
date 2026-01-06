@@ -21,10 +21,11 @@ public class Auth
 
     /// <summary>
     /// Generate token using access_key and access_secret from config
+    /// Automatically caches the token for subsequent API calls
     /// </summary>
     /// <returns>JSON response containing authentication token</returns>
     /// <remarks>See <see href="https://nimbbl.biz/docs/api-reference/generate-token-v-3/">Generate Token API</see> for more details.</remarks>
-    public Task<JsonElement> GenerateTokenAsync()
+    public async Task<JsonElement> GenerateTokenAsync()
     {
         var requestBody = new Dictionary<string, object?>
         {
@@ -32,7 +33,34 @@ public class Auth
             ["access_secret"] = _apiClient.GetConfigSecret()
         };
         
-        return _apiClient.Post<Dictionary<string, object?>, JsonElement>(ApiConstants.AuthGenerateToken, requestBody);
+        var response = await _apiClient.Post<Dictionary<string, object?>, JsonElement>(ApiConstants.AuthGenerateToken, requestBody);
+        
+        // Auto-cache the token for subsequent API calls
+        if (response.ValueKind == JsonValueKind.Object)
+        {
+            if (response.TryGetProperty("token", out var tokenProp) && tokenProp.ValueKind == JsonValueKind.String)
+            {
+                var token = tokenProp.GetString();
+                if (!string.IsNullOrWhiteSpace(token))
+                {
+                    // Parse expires_at if available
+                    DateTime? expiresAt = null;
+                    if (response.TryGetProperty("expires_at", out var expiresProp) && expiresProp.ValueKind == JsonValueKind.String)
+                    {
+                        var expiresStr = expiresProp.GetString();
+                        if (!string.IsNullOrWhiteSpace(expiresStr) && DateTime.TryParse(expiresStr, out var parsedExpires))
+                        {
+                            expiresAt = parsedExpires;
+                        }
+                    }
+                    
+                    // Cache the token
+                    _apiClient.SetBearerToken(token, expiresAt);
+                }
+            }
+        }
+        
+        return response;
     }
 
     /// <summary>
