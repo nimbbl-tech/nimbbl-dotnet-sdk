@@ -7,21 +7,18 @@ using static Nimbbl.Sdk.Rest.Common.HttpStatusCodes;
 
 namespace Nimbbl.Sdk.Rest.PaymentLinks;
 
-public class PaymentLinks
+public class PaymentLinks : BaseService
 {
-    private readonly ApiClient _apiClient;
-    
-    internal PaymentLinks(ApiClient apiClient)
+    internal PaymentLinks(ApiClient apiClient) : base(apiClient)
     {
-        _apiClient = apiClient;
     }
 
-    private void ValidatePaymentLinkIdentifier(Dictionary<string, object?> attributes)
+    private static void ValidatePaymentLinkIdentifier(Dictionary<string, object?> attributes)
     {
-        var hasInvoiceId = attributes.TryGetValue("invoice_id", out var invoiceId) && 
+        var hasInvoiceId = attributes.TryGetValue(JsonKeys.InvoiceId, out var invoiceId) && 
                           invoiceId != null && 
                           !string.IsNullOrWhiteSpace(invoiceId.ToString());
-        var hasPaymentLinkId = attributes.TryGetValue("payment_link_id", out var paymentLinkId) && 
+        var hasPaymentLinkId = attributes.TryGetValue(JsonKeys.PaymentLinkId, out var paymentLinkId) && 
                               paymentLinkId != null && 
                               !string.IsNullOrWhiteSpace(paymentLinkId.ToString());
         
@@ -37,60 +34,60 @@ public class PaymentLinks
 
     /// <summary>
     /// Create a new payment link.
+    /// Merchant token is automatically generated and used for authentication.
     /// </summary>
     /// <param name="request">Payment link creation request parameters</param>
-    /// <param name="token">Optional bearer token (takes priority over cached token)</param>
     /// <returns>JSON response containing payment link details</returns>
     /// <remarks>See <see href="https://nimbbl.biz/docs/api-reference/create-a-payment-link-v-3/">Create Payment Link API</see> for more details.</remarks>
-    public Task<JsonElement> CreatePaymentLinkAsync(Dictionary<string, object?> request, string? token = null)
+    public Task<JsonElement> CreatePaymentLinkAsync(Dictionary<string, object?> request)
     {
-        return _apiClient.Post<Dictionary<string, object?>, JsonElement>(ApiConstants.PaymentLinkCreate, request, token);
+        return ApiClient.Post<Dictionary<string, object?>, JsonElement>(ApiConstants.PaymentLinkCreate, request);
     }
 
     /// <summary>
     /// Update an existing payment link.
+    /// Merchant token is automatically generated and used for authentication.
     /// </summary>
     /// <param name="request">Payment link update request parameters (must include invoice_id or payment_link_id)</param>
-    /// <param name="token">Optional bearer token (takes priority over cached token)</param>
     /// <returns>JSON response containing updated payment link details</returns>
     /// <remarks>See <see href="https://nimbbl.biz/docs/api-reference/update-a-payment-link-v-3/">Update Payment Link API</see> for more details.</remarks>
-    public Task<JsonElement> UpdatePaymentLinkAsync(Dictionary<string, object?> request, string? token = null)
+    public Task<JsonElement> UpdatePaymentLinkAsync(Dictionary<string, object?> request)
     {
         // Validate that either invoice_id or payment_link_id is provided
         ValidatePaymentLinkIdentifier(request);
         
-        return _apiClient.Patch<Dictionary<string, object?>, JsonElement>(ApiConstants.PaymentLinkUpdate, request, token);
+        return ApiClient.Patch<Dictionary<string, object?>, JsonElement>(ApiConstants.PaymentLinkUpdate, request);
     }
 
     /// <summary>
     /// Get payment link details by invoice ID or payment link ID.
+    /// Merchant token is automatically generated and used for authentication.
     /// </summary>
     /// <param name="request">Enquiry request parameters (must include invoice_id or payment_link_id)</param>
-    /// <param name="token">Optional bearer token (takes priority over cached token)</param>
     /// <returns>JSON response containing payment link details</returns>
     /// <remarks>See <see href="https://nimbbl.biz/docs/api-reference/payment-link-enquiry-v-3/">Payment Link Enquiry API</see> for more details.</remarks>
-    public Task<JsonElement> EnquiryPaymentLinkAsync(Dictionary<string, object?> request, string? token = null)
+    public Task<JsonElement> EnquiryPaymentLinkAsync(Dictionary<string, object?> request)
     {
         // Validate that either invoice_id or payment_link_id is provided
         ValidatePaymentLinkIdentifier(request);
         
-        return _apiClient.Post<Dictionary<string, object?>, JsonElement>(ApiConstants.PaymentLinkEnquiry, request, token);
+        return ApiClient.Post<Dictionary<string, object?>, JsonElement>(ApiConstants.PaymentLinkEnquiry, request);
     }
 
     /// <summary>
     /// Perform actions on a payment link (send or cancel).
+    /// Merchant token is automatically generated and used for authentication.
     /// </summary>
     /// <param name="request">Action request parameters (must include invoice_id or payment_link_id, and action: "send" or "cancel")</param>
-    /// <param name="token">Optional bearer token (takes priority over cached token)</param>
     /// <returns>JSON response containing action result</returns>
     /// <remarks>See <see href="https://nimbbl.biz/docs/api-reference/payment-link-actions-v-3/">Payment Link Actions API</see> for more details.</remarks>
-    public Task<JsonElement> PerformPaymentLinkActionsAsync(Dictionary<string, object?> request, string? token = null)
+    public Task<JsonElement> PerformPaymentLinkActionsAsync(Dictionary<string, object?> request)
     {
         // Validate that either invoice_id or payment_link_id is provided
         ValidatePaymentLinkIdentifier(request);
         
         // Validate that action is provided
-        if (!request.TryGetValue("action", out var actionObj) || 
+        if (!request.TryGetValue(JsonKeys.Action, out var actionObj) || 
             actionObj == null || 
             string.IsNullOrWhiteSpace(actionObj.ToString()))
         {
@@ -103,7 +100,7 @@ public class PaymentLinks
         
         // Validate action value
         var action = actionObj.ToString()!.Trim();
-        if (action != "send" && action != "cancel")
+        if (action != ErrorMessages.ActionSend && action != ErrorMessages.ActionCancel)
         {
             throw new NimbblException(
                 ErrorMessages.ActionInvalid,
@@ -113,7 +110,7 @@ public class PaymentLinks
         }
         
         var endpoint = $"{ApiConstants.PaymentLinkActions}/actions";
-        return _apiClient.Post<Dictionary<string, object?>, JsonElement>(endpoint, request, token);
+        return ApiClient.Post<Dictionary<string, object?>, JsonElement>(endpoint, request);
     }
 }
 

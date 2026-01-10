@@ -5,38 +5,35 @@ using Nimbbl.Sdk.Rest.Exception;
 
 namespace Nimbbl.Sdk.Rest.Addresses;
 
-public class Addresses
+public class Addresses : BaseService
 {
-    private readonly ApiClient _apiClient;
-    
-    internal Addresses(ApiClient apiClient)
+    internal Addresses(ApiClient apiClient) : base(apiClient)
     {
-        _apiClient = apiClient;
     }
 
     /// <summary>
     /// List addresses for a user.
+    /// Merchant token is automatically generated and used for authentication.
     /// </summary>
     /// <param name="options">Optional query parameters (user_id, amount, currency, etc.)</param>
-    /// <param name="token">Optional bearer token (takes priority over cached token)</param>
     /// <returns>JSON response containing list of addresses</returns>
     /// <remarks>See <see href="https://nimbbl.biz/docs/api-reference/list-addresses-v-3/">List Addresses API</see> for more details.</remarks>
-    public Task<JsonElement> ListAddressesAsync(Dictionary<string, object?>? options = null, string? token = null)
+    public Task<JsonElement> ListAddressesAsync(Dictionary<string, object?>? options = null)
     {
         // Pass options directly - ApiClient will build query string automatically for GET requests
-        return _apiClient.Get<JsonElement>(ApiConstants.AddressList, options, token);
+        return ApiClient.Get<JsonElement>(ApiConstants.AddressList, options);
     }
 
     /// <summary>
     /// Create a new address.
+    /// Merchant token is automatically generated and used for authentication.
     /// </summary>
     /// <param name="request">Address creation request parameters</param>
-    /// <param name="token">Optional bearer token (takes priority over cached token)</param>
     /// <returns>JSON response containing created address details</returns>
     /// <remarks>See <see href="https://nimbbl.biz/docs/api-reference/create-an-address-v-3/">Create Address API</see> for more details.</remarks>
-    public Task<JsonElement> CreateAddressAsync(Dictionary<string, object?> request, string? token = null)
+    public Task<JsonElement> CreateAddressAsync(Dictionary<string, object?> request)
     {
-        return _apiClient.Post<Dictionary<string, object?>, JsonElement>(ApiConstants.AddressCreate, request, token);
+        return ApiClient.Post<Dictionary<string, object?>, JsonElement>(ApiConstants.AddressCreate, request);
     }
 
     // NOTE: The public Addresses docs do not include a stable "Get Address by ID" endpoint.
@@ -44,13 +41,13 @@ public class Addresses
 
     /// <summary>
     /// Update an existing address.
+    /// Merchant token is automatically generated and used for authentication.
     /// </summary>
     /// <param name="id">Address ID</param>
     /// <param name="request">Address update request parameters</param>
-    /// <param name="token">Optional bearer token (takes priority over cached token)</param>
     /// <returns>JSON response containing updated address details</returns>
     /// <remarks>See <see href="https://nimbbl.biz/docs/api-reference/update-an-address-v-3/">Update Address API</see> for more details.</remarks>
-    public Task<JsonElement> UpdateAddressAsync(string id, Dictionary<string, object?> request, string? token = null)
+    public Task<JsonElement> UpdateAddressAsync(string id, Dictionary<string, object?> request)
     {
         // Per docs, Update Address expects an `address` object in the request body, including `address_id`.
         // Ref: https://nimbbl.biz/docs/api-reference/update-an-address-v-3/
@@ -78,64 +75,64 @@ public class Addresses
         }
 
         // Endpoint is `v3/addresses` (no /{id})
-        return _apiClient.Patch<Dictionary<string, object?>, JsonElement>(ApiConstants.AddressUpdate, payload, token);
+        return ApiClient.Patch<Dictionary<string, object?>, JsonElement>(ApiConstants.AddressUpdate, payload);
     }
 
     /// <summary>
     /// Delete an address.
+    /// Merchant token is automatically generated and used for authentication.
     /// </summary>
     /// <param name="id">Address ID</param>
-    /// <param name="token">Optional bearer token (takes priority over cached token)</param>
     /// <returns>JSON response containing deletion status</returns>
     /// <remarks>See <see href="https://nimbbl.biz/docs/api-reference/delete-an-address-v-3/">Delete Address API</see> for more details.</remarks>
-    public Task<JsonElement> DeleteAddressAsync(string id, string? token = null)
+    public Task<JsonElement> DeleteAddressAsync(string id)
     {
         // Use query parameter as per API documentation
         var request = new Dictionary<string, object?> { ["address_id"] = id };
-        return _apiClient.Delete<JsonElement>(ApiConstants.AddressDelete, request, token);
+        return ApiClient.Delete<JsonElement>(ApiConstants.AddressDelete, request);
     }
 
     /// <summary>
     /// Import multiple addresses in bulk.
+    /// Merchant token is automatically generated and used for authentication.
     /// </summary>
     /// <param name="request">Address import request parameters</param>
-    /// <param name="token">Optional bearer token (takes priority over cached token)</param>
     /// <returns>JSON response containing import status</returns>
     /// <remarks>See <see href="https://nimbbl.biz/docs/api-reference/import-addresses-v-3/">Import Addresses API</see> for more details.</remarks>
-    public Task<JsonElement> ImportAddressesAsync(Dictionary<string, object?> request, string? token = null)
+    public Task<JsonElement> ImportAddressesAsync(Dictionary<string, object?> request)
     {
-        return _apiClient.Post<Dictionary<string, object?>, JsonElement>(ApiConstants.AddressImport, request, token);
+        return ApiClient.Post<Dictionary<string, object?>, JsonElement>(ApiConstants.AddressImport, request);
     }
 
     /// <summary>
     /// Check address eligibility for delivery.
+    /// Merchant token is automatically generated and used for authentication.
     /// </summary>
     /// <param name="request">Eligibility check request parameters (pincode is required)</param>
-    /// <param name="token">Optional bearer token (takes priority over cached token)</param>
     /// <returns>JSON response containing eligibility status</returns>
     /// <remarks>See <see href="https://nimbbl.biz/docs/api-reference/check-address-eligibility-v-3/">Check Address Eligibility API</see> for more details.</remarks>
-    public Task<JsonElement> CheckAddressEligibilityAsync(Dictionary<string, object?> request, string? token = null)
+    public Task<JsonElement> CheckAddressEligibilityAsync(Dictionary<string, object?> request)
     {
         // Validate required parameter
-        if (!request.ContainsKey("pincode") || string.IsNullOrWhiteSpace(request["pincode"]?.ToString()))
+        if (!request.ContainsKey(JsonKeys.Pincode) || string.IsNullOrWhiteSpace(request[JsonKeys.Pincode]?.ToString()))
         {
             throw new NimbblException(ErrorMessages.PincodeRequired, 400, ErrorCodes.PincodeRequired);
         }
         
         // Use GET with query parameters as per API documentation
-        return _apiClient.Get<JsonElement>(ApiConstants.AddressCheckEligibility, request, token);
+        return ApiClient.Get<JsonElement>(ApiConstants.AddressCheckEligibility, request);
     }
 
     /// <summary>
     /// Link an address with an order.
+    /// Merchant token is automatically generated and used for authentication.
     /// </summary>
     /// <param name="request">Link request parameters</param>
-    /// <param name="token">Optional bearer token (takes priority over cached token)</param>
     /// <returns>JSON response containing link status</returns>
     /// <remarks>See <see href="https://nimbbl.biz/docs/api-reference/link-address-with-order-v-3/">Link Address with Order API</see> for more details.</remarks>
-    public Task<JsonElement> LinkAddressWithOrderAsync(Dictionary<string, object?> request, string? token = null)
+    public Task<JsonElement> LinkAddressWithOrderAsync(Dictionary<string, object?> request)
     {
-        return _apiClient.Post<Dictionary<string, object?>, JsonElement>(ApiConstants.AddressLinkOrder, request, token);
+        return ApiClient.Post<Dictionary<string, object?>, JsonElement>(ApiConstants.AddressLinkOrder, request);
     }
 }
 

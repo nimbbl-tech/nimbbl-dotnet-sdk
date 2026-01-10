@@ -335,7 +335,7 @@ client.SetBearerToken("order_token_here", expiresAtUtc: DateTime.UtcNow.AddMinut
 
 ### Webhook
 
-Not exposed in this .NET build (PHP removed Users/Webhook). Use `Common/NimbblUtils` for signature verification if needed.
+Not exposed in this .NET build. Use `Common/NimbblUtils` for signature verification if needed.
 
 ## Project Structure
 

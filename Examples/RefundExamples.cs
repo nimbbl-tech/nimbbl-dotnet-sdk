@@ -81,20 +81,7 @@ public static class RefundExamples
         
         try
         {
-            // Generate merchant token
-            var tokenResponse = await api.Auth().GenerateTokenAsync();
-            var merchantToken = tokenResponse.TryGetProperty("token", out var tokenProp) 
-                ? tokenProp.GetString() 
-                : null;
-            
-            if (string.IsNullOrWhiteSpace(merchantToken))
-            {
-                Helpers.PrintError("Failed to generate merchant token.\n");
-                return;
-            }
-            
-            api.SetBearerToken(merchantToken);
-            
+            // Merchant token is automatically generated and used for authentication
             var result = await api.Refunds().InitiateRefundAsync(data);
             
             if (result.TryGetProperty("error", out var errorProp))

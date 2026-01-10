@@ -170,7 +170,7 @@ public static class PaymentLinkExamples
                 Helpers.PrintInfo($"Using default expires_at (UTC): {expiresAt}\n");
             }
 
-            // Optional fields (aligned with PHP examples)
+            // Optional fields
             var useDefaults = Helpers.GetInput("\nUse default values for optional fields? (y/N): ", false);
             var useDefaultsFlag = !string.IsNullOrWhiteSpace(useDefaults) && useDefaults.Trim().Equals("y", StringComparison.OrdinalIgnoreCase);
 
@@ -212,7 +212,7 @@ public static class PaymentLinkExamples
                     "359043371395481"
                 };
 
-                Helpers.PrintInfo("Using defaults from PHP curl example:\n");
+                Helpers.PrintInfo("Using default values:\n");
                 Helpers.PrintInfo("  description='xxx', terms_and_conditions='xxx', callback_url='https://www.google.com'\n");
                 Helpers.PrintInfo("  send_sms=true, send_email=true\n");
                 Helpers.PrintInfo("  bank_account: account_number='037801513988', name='Vasudha Maini', ifsc='ICIC0000378'\n");
@@ -321,13 +321,8 @@ public static class PaymentLinkExamples
             if (customAttributes != null) data["custom_attributes"] = customAttributes;
             if (topLevelSerialNumbers != null) data["serial_numbers"] = topLevelSerialNumbers;
 
-            // Use provided merchant token if given, otherwise use cached token (from Auth().GenerateTokenAsync).
-            // Note: If neither is available, SDK will throw an error (no auto-generate fallback).
-            Helpers.PrintInfo("\nAuthentication:\n");
-            var merchantToken = Helpers.GetInput("Enter Merchant Token (optional, press Enter to use cached token): ", false);
-            var result = await api.PaymentLinks().CreatePaymentLinkAsync(
-                data,
-                string.IsNullOrWhiteSpace(merchantToken) ? null : merchantToken);
+            // Merchant token is automatically generated and used for authentication
+            var result = await api.PaymentLinks().CreatePaymentLinkAsync(data);
             
             if (result.TryGetProperty("error", out var errorProp))
             {
@@ -360,11 +355,7 @@ public static class PaymentLinkExamples
     {
         try
         {
-            // Use provided merchant token if given, otherwise use cached token (from Auth().GenerateTokenAsync).
-            // Note: If neither is available, SDK will throw an error (no auto-generate fallback).
-            Helpers.PrintInfo("\nAuthentication:\n");
-            var merchantToken = Helpers.GetInput("Enter Merchant Token (optional, press Enter to use cached token): ", false);
-            
+            // Merchant token is automatically generated and used for authentication
             Helpers.PrintInfo("Identify payment link using:\n");
             Console.WriteLine("1. Invoice ID\n");
             Console.WriteLine("2. Payment Link ID\n");
@@ -444,9 +435,7 @@ public static class PaymentLinkExamples
                 return;
             }
             
-            var result = await api.PaymentLinks().UpdatePaymentLinkAsync(
-                data,
-                string.IsNullOrWhiteSpace(merchantToken) ? null : merchantToken);
+            var result = await api.PaymentLinks().UpdatePaymentLinkAsync(data);
             
             if (result.TryGetProperty("error", out var errorProp))
             {
@@ -480,11 +469,7 @@ public static class PaymentLinkExamples
     {
         try
         {
-            // Use provided merchant token if given, otherwise use cached token (from Auth().GenerateTokenAsync).
-            // Note: If neither is available, SDK will throw an error (no auto-generate fallback).
-            Helpers.PrintInfo("\nAuthentication:\n");
-            var merchantToken = Helpers.GetInput("Enter Merchant Token (optional, press Enter to use cached token): ", false);
-            
+            // Merchant token is automatically generated and used for authentication
             Helpers.PrintInfo("Identify payment link using:\n");
             Console.WriteLine("1. Invoice ID\n");
             Console.WriteLine("2. Payment Link ID\n");
@@ -517,9 +502,7 @@ public static class PaymentLinkExamples
                 return;
             }
             
-            var result = await api.PaymentLinks().EnquiryPaymentLinkAsync(
-                data,
-                string.IsNullOrWhiteSpace(merchantToken) ? null : merchantToken);
+            var result = await api.PaymentLinks().EnquiryPaymentLinkAsync(data);
             
             if (result.TryGetProperty("error", out var errorProp))
             {
@@ -570,11 +553,7 @@ public static class PaymentLinkExamples
     {
         try
         {
-            // Use provided merchant token if given, otherwise use cached token (from Auth().GenerateTokenAsync).
-            // Note: If neither is available, SDK will throw an error (no auto-generate fallback).
-            Helpers.PrintInfo("\nAuthentication:\n");
-            var merchantToken = Helpers.GetInput("Enter Merchant Token (optional, press Enter to use cached token): ", false);
-            
+            // Merchant token is automatically generated and used for authentication
             Helpers.PrintInfo("Identify payment link using:\n");
             Console.WriteLine("1. Invoice ID\n");
             Console.WriteLine("2. Payment Link ID\n");
@@ -626,9 +605,7 @@ public static class PaymentLinkExamples
                 return;
             }
             
-            var result = await api.PaymentLinks().PerformPaymentLinkActionsAsync(
-                data,
-                string.IsNullOrWhiteSpace(merchantToken) ? null : merchantToken);
+            var result = await api.PaymentLinks().PerformPaymentLinkActionsAsync(data);
             
             if (result.TryGetProperty("error", out var errorProp))
             {

@@ -74,13 +74,8 @@ public static class OrderExamples
                 ((Dictionary<string, object?>)orderData["user"]!)["last_name"] = lastName;
             }
             
-            // Ask for merchant token (optional - will use cached token if not provided)
-            Helpers.PrintInfo("\nAuthentication:\n");
-            var merchantToken = Helpers.GetInput("Enter Merchant Token (optional, press Enter to use cached token): ", false);
-            
-            // Use the provided token if given, otherwise use cached token (from GenerateTokenAsync)
-            // The SDK will automatically use cached token if token parameter is null
-            var order = await api.Orders().CreateOrderAsync(orderData, string.IsNullOrWhiteSpace(merchantToken) ? null : merchantToken);
+            // Merchant token is automatically generated and used for authentication
+            var order = await api.Orders().CreateOrderAsync(orderData);
             
             if (order.TryGetProperty("error", out var errorProp))
             {
@@ -119,16 +114,7 @@ public static class OrderExamples
                 return;
             }
             
-            // Get order token
-            var orderToken = Helpers.GetInput("Enter Order Token: ", false);
-            if (string.IsNullOrWhiteSpace(orderToken))
-            {
-                Helpers.PrintError("Order Token is required. Create an order first to get the token.\n");
-                return;
-            }
-            
-            api.SetBearerToken(orderToken);
-            
+            // Merchant token is automatically generated and used for authentication
             var order = await api.Orders().GetOrderByIdAsync(orderId);
             
             if (order.TryGetProperty("error", out var errorProp))
@@ -173,16 +159,7 @@ public static class OrderExamples
                 return;
             }
             
-            // Get order token
-            var orderToken = Helpers.GetInput("Enter Order Token: ", false);
-            if (string.IsNullOrWhiteSpace(orderToken))
-            {
-                Helpers.PrintError("Order Token is required. Create an order first to get the token.\n");
-                return;
-            }
-            
-            api.SetBearerToken(orderToken);
-            
+            // Merchant token is automatically generated and used for authentication
             var order = await api.Orders().GetOrderByInvoiceIdAsync(invoiceId);
             
             if (order.TryGetProperty("error", out var errorProp))

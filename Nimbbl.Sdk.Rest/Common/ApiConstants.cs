@@ -63,5 +63,17 @@ internal static class ApiConstants
     public const string HttpPatch = "PATCH";
     public const string HttpPut = "PUT";
     public const string HttpDelete = "DELETE";
+
+    // Token expiration threshold (in minutes)
+    // Tokens are considered expired if they will expire within this threshold
+    // Calculation: Default token expiration is 20 minutes
+    // - 1 minute deducted for client HTTP timeout buffer
+    // - 1 minute deducted for server timeout buffer
+    // Result: 20 - 1 - 1 = 18 minutes
+    public const int TokenExpirationThresholdMinutes = 18;
+
+    // HTTP client timeout (in seconds)
+    // Default timeout for all HTTP requests (read/write operations)
+    public const int DefaultHttpTimeoutSeconds = 60; // 1 minute
 }
 

@@ -1,38 +1,34 @@
 using System.Text.Json;
 using Nimbbl.Sdk.Rest.Common;
 using Nimbbl.Sdk.Rest.Exception;
-using Nimbbl.Sdk.Rest.Log;
 using Nimbbl.Sdk.Rest.RestClient;
 namespace Nimbbl.Sdk.Rest.Orders;
 
-public class Orders
+public class Orders : BaseService
 {
-    private readonly ApiClient _apiClient;
-    internal Orders(ApiClient apiClient)
+    internal Orders(ApiClient apiClient) : base(apiClient)
     {
-        _apiClient = apiClient;
     }
 
     /// <summary>
     /// Create a new order.
+    /// Merchant token is automatically generated and used for authentication.
     /// </summary>
     /// <param name="orderRequest">Order creation request parameters</param>
-    /// <param name="token">Optional bearer token (takes priority over cached token)</param>
     /// <returns>JSON response containing order details</returns>
     /// <remarks>See <see href="https://nimbbl.biz/docs/api-reference/create-an-order-v-3/">Create Order API</see> for more details.</remarks>
-    public Task<JsonElement> CreateOrderAsync(Dictionary<string, object?> orderRequest, string? token = null)
+    public Task<JsonElement> CreateOrderAsync(Dictionary<string, object?> orderRequest)
     {
-        var logger = Logger.GetInstance();
-        var isEncryptEnabled = _apiClient.IsEncryptPayloadEnabled();
-        logger.DebugWithCaller($"CreateOrderAsync - Encryption enabled: {isEncryptEnabled}");
+        var isEncryptEnabled = ApiClient.IsEncryptPayloadEnabled();
+        Logger.DebugWithCaller($"CreateOrderAsync - Encryption enabled: {isEncryptEnabled}");
         
         // Encrypt payload if encryption is enabled
         if (isEncryptEnabled)
         {
             try
             {
-                logger.DebugWithCaller("CreateOrderAsync - Starting payload encryption");
-                var encryption = new Encryption(_apiClient.GetConfigSecret());
+                Logger.DebugWithCaller($"CreateOrderAsync - {ErrorMessages.LogStartingPayloadEncryption}");
+                var encryption = new Encryption(ApiClient.GetConfigSecret());
                 var encryptedPayload = encryption.Encrypt(orderRequest);
                 
                 // Wrap encrypted payload in the format expected by API
@@ -40,47 +36,47 @@ public class Orders
                 // The API accepts either a regular request or an encrypted payload
                 orderRequest = new Dictionary<string, object?>
                 {
-                    ["encrypted_payload"] = encryptedPayload
+                    [JsonKeys.EncryptedPayload] = encryptedPayload
                 };
                 
-                logger.InfoWithCaller("Order request payload encrypted successfully");
+                Logger.InfoWithCaller($"Order request {ErrorMessages.LogPayloadEncryptedSuccessfully}");
             }
             catch (System.Exception ex)
             {
-                logger.ExceptionWithCaller($"Failed to encrypt order payload: {ex.Message}", ex);
-                throw new NimbblException($"Failed to encrypt order payload: {ex.Message}", 500, "ENCRYPTION_ERROR");
+                Logger.ExceptionWithCaller(string.Format(ErrorMessages.EncryptionErrorFormat, "order", ex.Message), ex);
+                throw new NimbblException(string.Format(ErrorMessages.EncryptionErrorFormat, "order", ex.Message), 500, ErrorCodes.EncryptionError);
             }
         }
         else
         {
-            logger.DebugWithCaller("CreateOrderAsync - Encryption disabled, sending plain payload");
+            Logger.DebugWithCaller($"CreateOrderAsync - {ErrorMessages.LogEncryptionDisabled}");
         }
         
-        return _apiClient.Post<Dictionary<string, object?>, JsonElement>(ApiConstants.OrderCreate, orderRequest, token);
+        return ApiClient.Post<Dictionary<string, object?>, JsonElement>(ApiConstants.OrderCreate, orderRequest);
     }
 
     /// <summary>
     /// Get order details by order ID.
+    /// Merchant token is automatically generated and used for authentication.
     /// </summary>
     /// <param name="orderId">Order ID</param>
-    /// <param name="token">Optional bearer token (takes priority over cached token)</param>
     /// <returns>JSON response containing order details</returns>
     /// <remarks>See <see href="https://nimbbl.biz/docs/api-reference/get-order-v-3/">Get Order API</see> for more details.</remarks>
-    public Task<JsonElement> GetOrderByIdAsync(string orderId, string? token = null)
+    public Task<JsonElement> GetOrderByIdAsync(string orderId)
     {
-        return _apiClient.Get<JsonElement>($"{ApiConstants.OrderGet}?order_id={orderId}", token);
+        return ApiClient.Get<JsonElement>($"{ApiConstants.OrderGet}?order_id={orderId}");
     }
 
     /// <summary>
     /// Get order details by invoice ID.
+    /// Merchant token is automatically generated and used for authentication.
     /// </summary>
     /// <param name="invoiceId">Invoice ID</param>
-    /// <param name="token">Optional bearer token (takes priority over cached token)</param>
     /// <returns>JSON response containing order details</returns>
     /// <remarks>See <see href="https://nimbbl.biz/docs/api-reference/get-order-v-3/">Get Order API</see> for more details.</remarks>
-    public Task<JsonElement> GetOrderByInvoiceIdAsync(string invoiceId, string? token = null)
+    public Task<JsonElement> GetOrderByInvoiceIdAsync(string invoiceId)
     {
-        return _apiClient.Get<JsonElement>($"{ApiConstants.OrderGet}?invoice_id={invoiceId}", token);
+        return ApiClient.Get<JsonElement>($"{ApiConstants.OrderGet}?invoice_id={invoiceId}");
     }
 
 }

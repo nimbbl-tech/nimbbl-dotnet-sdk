@@ -10,13 +10,10 @@ namespace Nimbbl.Sdk.Rest.Auth;
 /// <summary>
 /// Authentication wrapper for generating and refreshing tokens
 /// </summary>
-public class Auth
+public class Auth : BaseService
 {
-    private readonly ApiClient _apiClient;
-
-    internal Auth(ApiClient apiClient)
+    internal Auth(ApiClient apiClient) : base(apiClient)
     {
-        _apiClient = apiClient;
     }
 
     /// <summary>
@@ -29,23 +26,23 @@ public class Auth
     {
         var requestBody = new Dictionary<string, object?>
         {
-            ["access_key"] = _apiClient.GetConfigKey(),
-            ["access_secret"] = _apiClient.GetConfigSecret()
+            [JsonKeys.AccessKey] = ApiClient.GetConfigKey(),
+            [JsonKeys.AccessSecret] = ApiClient.GetConfigSecret()
         };
         
-        var response = await _apiClient.Post<Dictionary<string, object?>, JsonElement>(ApiConstants.AuthGenerateToken, requestBody);
+        var response = await ApiClient.Post<Dictionary<string, object?>, JsonElement>(ApiConstants.AuthGenerateToken, requestBody);
         
         // Auto-cache the token for subsequent API calls
         if (response.ValueKind == JsonValueKind.Object)
         {
-            if (response.TryGetProperty("token", out var tokenProp) && tokenProp.ValueKind == JsonValueKind.String)
+            if (response.TryGetProperty(JsonKeys.Token, out var tokenProp) && tokenProp.ValueKind == JsonValueKind.String)
             {
                 var token = tokenProp.GetString();
                 if (!string.IsNullOrWhiteSpace(token))
                 {
                     // Parse expires_at if available
                     DateTime? expiresAt = null;
-                    if (response.TryGetProperty("expires_at", out var expiresProp) && expiresProp.ValueKind == JsonValueKind.String)
+                    if (response.TryGetProperty(JsonKeys.ExpiresAt, out var expiresProp) && expiresProp.ValueKind == JsonValueKind.String)
                     {
                         var expiresStr = expiresProp.GetString();
                         if (!string.IsNullOrWhiteSpace(expiresStr) && DateTime.TryParse(expiresStr, out var parsedExpires))
@@ -55,7 +52,7 @@ public class Auth
                     }
                     
                     // Cache the token
-                    _apiClient.SetBearerToken(token, expiresAt);
+                    ApiClient.SetBearerToken(token, expiresAt);
                 }
             }
         }
@@ -92,14 +89,14 @@ public class Auth
         
         var attributes = new Dictionary<string, object?>
         {
-            ["refresh_token"] = refreshToken
+            [JsonKeys.RefreshToken] = refreshToken
         };
         
         // Bearer token required for refresh token API
         // Note: In .NET, we need to set the bearer token before making the request
-        _apiClient.SetBearerToken(token);
+        ApiClient.SetBearerToken(token);
         
-        return _apiClient.Post<Dictionary<string, object?>, JsonElement>(ApiConstants.AuthRefreshToken, attributes);
+        return ApiClient.Post<Dictionary<string, object?>, JsonElement>(ApiConstants.AuthRefreshToken, attributes);
     }
 }
 

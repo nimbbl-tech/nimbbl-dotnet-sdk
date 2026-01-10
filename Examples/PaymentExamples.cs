@@ -15,15 +15,7 @@ public static class PaymentExamples
     /// </summary>
     public static async Task InitiatePaymentExample(NimbblApi api)
     {
-        var token = Helpers.GetInput("Enter Order Token: ", false);
-        if (string.IsNullOrWhiteSpace(token))
-        {
-            Helpers.PrintError("Order Token is required.\n");
-            return;
-        }
-        
-        api.SetBearerToken(token);
-        
+        // Merchant token is automatically generated and used for authentication
         var orderId = Helpers.GetInput("Enter Order ID: ");
         if (string.IsNullOrWhiteSpace(orderId))
         {
@@ -90,15 +82,7 @@ public static class PaymentExamples
     {
         try
         {
-            var token = Helpers.GetInput("Enter Order Token: ", false);
-            if (string.IsNullOrWhiteSpace(token))
-            {
-                Helpers.PrintError("Order Token is required.\n");
-                return;
-            }
-            
-            api.SetBearerToken(token);
-            
+            // Merchant token is automatically generated and used for authentication
             var transactionId = Helpers.GetInput("Enter Transaction ID: ");
             if (string.IsNullOrWhiteSpace(transactionId))
             {
@@ -147,15 +131,7 @@ public static class PaymentExamples
     {
         try
         {
-            var token = Helpers.GetInput("Enter Order Token: ", false);
-            if (string.IsNullOrWhiteSpace(token))
-            {
-                Helpers.PrintError("Order Token is required.\n");
-                return;
-            }
-            
-            api.SetBearerToken(token);
-            
+            // Merchant token is automatically generated and used for authentication
             var transactionId = Helpers.GetInput("Enter Transaction ID: ");
             if (string.IsNullOrWhiteSpace(transactionId))
             {

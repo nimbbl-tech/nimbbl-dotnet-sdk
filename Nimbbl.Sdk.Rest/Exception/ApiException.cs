@@ -1,8 +1,5 @@
 namespace Nimbbl.Sdk.Rest.Exception;
 
-public class ApiException : NimbblException
-{
-    public ApiException(string message, int statusCode = 0, string? errorCode = null)
-        : base(message, statusCode, errorCode) { }
-}
+public class ApiException(string message, int statusCode = 0, string? errorCode = null) 
+    : NimbblException(message, statusCode, errorCode);
 

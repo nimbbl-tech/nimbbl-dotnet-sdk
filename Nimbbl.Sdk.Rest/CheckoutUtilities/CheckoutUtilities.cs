@@ -1,179 +1,180 @@
 using System.Text.Json;
 using Nimbbl.Sdk.Rest.Common;
 using Nimbbl.Sdk.Rest.Exception;
-using Nimbbl.Sdk.Rest.Log;
 using Nimbbl.Sdk.Rest.RestClient;
 
 namespace Nimbbl.Sdk.Rest.CheckoutUtilities;
 
-public class CheckoutUtilities
+public class CheckoutUtilities : BaseService
 {
-    private readonly ApiClient _apiClient;
-    
-    internal CheckoutUtilities(ApiClient apiClient)
+    internal CheckoutUtilities(ApiClient apiClient) : base(apiClient)
     {
-        _apiClient = apiClient;
     }
 
     /// <summary>
     /// List available payment modes for an order.
+    /// Merchant token is automatically generated and used for authentication.
     /// </summary>
     /// <param name="request">Request parameters including order_id (required), and optionally os and upi_app_package_names</param>
     /// <returns>JSON response containing available payment modes</returns>
     /// <remarks>See <see href="https://nimbbl.biz/docs/api-reference/list-of-payment-modes-v-3/">List Payment Modes API</see> for more details.</remarks>
     public Task<JsonElement> ListPaymentModesAsync(Dictionary<string, object?> request)
     {
-        return _apiClient.Post<Dictionary<string, object?>, JsonElement>(ApiConstants.CheckoutPaymentModes, request);
+        return ApiClient.Post<Dictionary<string, object?>, JsonElement>(ApiConstants.CheckoutPaymentModes, request);
     }
 
     /// <summary>
     /// List available banks for net banking.
+    /// Merchant token is automatically generated and used for authentication.
     /// </summary>
     /// <param name="request">Request parameters</param>
-    /// <param name="token">Optional bearer token (takes priority over cached token)</param>
     /// <returns>JSON response containing list of available banks</returns>
     /// <remarks>See <see href="https://nimbbl.biz/docs/api-reference/list-of-banks-v-3/">List Banks API</see> for more details.</remarks>
-    public Task<JsonElement> ListBanksAsync(Dictionary<string, object?> request, string? token = null)
+    public Task<JsonElement> ListBanksAsync(Dictionary<string, object?> request)
     {
-        var logger = Logger.GetInstance();
-        var isEncryptEnabled = _apiClient.IsEncryptPayloadEnabled();
-        logger.DebugWithCaller($"ListBanksAsync - Encryption enabled: {isEncryptEnabled}");
+        var isEncryptEnabled = ApiClient.IsEncryptPayloadEnabled();
+        Logger.DebugWithCaller($"ListBanksAsync - Encryption enabled: {isEncryptEnabled}");
 
         if (isEncryptEnabled)
         {
             try
             {
-                logger.DebugWithCaller("ListBanksAsync - Starting payload encryption");
-                var encryption = new Encryption(_apiClient.GetConfigSecret());
+                Logger.DebugWithCaller($"ListBanksAsync - {ErrorMessages.LogStartingPayloadEncryption}");
+                var encryption = new Encryption(ApiClient.GetConfigSecret());
                 var encryptedPayload = encryption.Encrypt(request);
 
                 request = new Dictionary<string, object?>
                 {
-                    ["encrypted_payload"] = encryptedPayload
+                    [JsonKeys.EncryptedPayload] = encryptedPayload
                 };
 
-                logger.InfoWithCaller("List banks payload encrypted successfully");
+                Logger.InfoWithCaller($"List banks {ErrorMessages.LogPayloadEncryptedSuccessfully}");
             }
             catch (System.Exception ex)
             {
-                logger.ExceptionWithCaller($"Failed to encrypt list banks payload: {ex.Message}", ex);
-                throw new NimbblException($"Failed to encrypt list banks payload: {ex.Message}", 500, "ENCRYPTION_ERROR");
+                Logger.ExceptionWithCaller(string.Format(ErrorMessages.EncryptionErrorFormat, "list banks", ex.Message), ex);
+                throw new NimbblException(string.Format(ErrorMessages.EncryptionErrorFormat, "list banks", ex.Message), 500, ErrorCodes.EncryptionError);
             }
         }
         else
         {
-            logger.DebugWithCaller("ListBanksAsync - Encryption disabled, sending plain payload");
+            Logger.DebugWithCaller($"ListBanksAsync - {ErrorMessages.LogEncryptionDisabled}");
         }
 
-        return _apiClient.Post<Dictionary<string, object?>, JsonElement>(ApiConstants.CheckoutListBanks, request, token);
+        return ApiClient.Post<Dictionary<string, object?>, JsonElement>(ApiConstants.CheckoutListBanks, request);
     }
 
     /// <summary>
     /// List available wallets for payment.
+    /// Merchant token is automatically generated and used for authentication.
     /// </summary>
     /// <param name="request">Request parameters</param>
-    /// <param name="token">Optional bearer token (takes priority over cached token)</param>
     /// <returns>JSON response containing list of available wallets</returns>
     /// <remarks>See <see href="https://nimbbl.biz/docs/api-reference/list-of-wallets-v-3/">List Wallets API</see> for more details.</remarks>
-    public Task<JsonElement> ListWalletsAsync(Dictionary<string, object?> request, string? token = null)
+    public Task<JsonElement> ListWalletsAsync(Dictionary<string, object?> request)
     {
-        var logger = Logger.GetInstance();
-        var isEncryptEnabled = _apiClient.IsEncryptPayloadEnabled();
-        logger.DebugWithCaller($"ListWalletsAsync - Encryption enabled: {isEncryptEnabled}");
+        var isEncryptEnabled = ApiClient.IsEncryptPayloadEnabled();
+        Logger.DebugWithCaller($"ListWalletsAsync - Encryption enabled: {isEncryptEnabled}");
 
         if (isEncryptEnabled)
         {
             try
             {
-                logger.DebugWithCaller("ListWalletsAsync - Starting payload encryption");
-                var encryption = new Encryption(_apiClient.GetConfigSecret());
+                Logger.DebugWithCaller($"ListWalletsAsync - {ErrorMessages.LogStartingPayloadEncryption}");
+                var encryption = new Encryption(ApiClient.GetConfigSecret());
                 var encryptedPayload = encryption.Encrypt(request);
 
                 request = new Dictionary<string, object?>
                 {
-                    ["encrypted_payload"] = encryptedPayload
+                    [JsonKeys.EncryptedPayload] = encryptedPayload
                 };
 
-                logger.InfoWithCaller("List wallets payload encrypted successfully");
+                Logger.InfoWithCaller($"List wallets {ErrorMessages.LogPayloadEncryptedSuccessfully}");
             }
             catch (System.Exception ex)
             {
-                logger.ExceptionWithCaller($"Failed to encrypt list wallets payload: {ex.Message}", ex);
-                throw new NimbblException($"Failed to encrypt list wallets payload: {ex.Message}", 500, "ENCRYPTION_ERROR");
+                Logger.ExceptionWithCaller(string.Format(ErrorMessages.EncryptionErrorFormat, "list wallets", ex.Message), ex);
+                throw new NimbblException(string.Format(ErrorMessages.EncryptionErrorFormat, "list wallets", ex.Message), 500, ErrorCodes.EncryptionError);
             }
         }
         else
         {
-            logger.DebugWithCaller("ListWalletsAsync - Encryption disabled, sending plain payload");
+            Logger.DebugWithCaller($"ListWalletsAsync - {ErrorMessages.LogEncryptionDisabled}");
         }
 
-        return _apiClient.Post<Dictionary<string, object?>, JsonElement>(ApiConstants.CheckoutListWallets, request, token);
+        return ApiClient.Post<Dictionary<string, object?>, JsonElement>(ApiConstants.CheckoutListWallets, request);
     }
 
     /// <summary>
     /// List available EMI options.
+    /// Merchant token is automatically generated and used for authentication.
     /// </summary>
     /// <param name="request">Request parameters</param>
     /// <returns>JSON response containing list of available EMI options</returns>
     /// <remarks>See <see href="https://nimbbl.biz/docs/api-reference/list-of-em-is-v-3/">List EMIs API</see> for more details.</remarks>
     public Task<JsonElement> ListEmisAsync(Dictionary<string, object?> request)
     {
-        return _apiClient.Post<Dictionary<string, object?>, JsonElement>(ApiConstants.CheckoutListEmis, request);
+        return ApiClient.Post<Dictionary<string, object?>, JsonElement>(ApiConstants.CheckoutListEmis, request);
     }
 
     /// <summary>
     /// Get available offers for an order.
+    /// Merchant token is automatically generated and used for authentication.
     /// </summary>
     /// <param name="request">Request parameters</param>
     /// <returns>JSON response containing available offers</returns>
     /// <remarks>See <see href="https://nimbbl.biz/docs/api-reference/offers-v-3/">Get Offers API</see> for more details.</remarks>
     public Task<JsonElement> GetOffersAsync(Dictionary<string, object?> request)
     {
-        return _apiClient.Post<Dictionary<string, object?>, JsonElement>(ApiConstants.CheckoutOffers, request);
+        return ApiClient.Post<Dictionary<string, object?>, JsonElement>(ApiConstants.CheckoutOffers, request);
     }
 
     /// <summary>
     /// Get card BIN data for a card number.
+    /// Merchant token is automatically generated and used for authentication.
     /// </summary>
     /// <param name="request">Request parameters including card_bin</param>
     /// <returns>JSON response containing card BIN data</returns>
     /// <remarks>See <see href="https://nimbbl.biz/docs/api-reference/get-card-bin-data-v-3/">Get Card BIN Data API</see> for more details.</remarks>
     public Task<JsonElement> GetCardBinDataAsync(Dictionary<string, object?> request)
     {
-        return _apiClient.Post<Dictionary<string, object?>, JsonElement>(ApiConstants.CheckoutGetBinData, request);
+        return ApiClient.Post<Dictionary<string, object?>, JsonElement>(ApiConstants.CheckoutGetBinData, request);
     }
 
     /// <summary>
     /// Get card details using encrypted card data.
+    /// Merchant token is automatically generated and used for authentication.
     /// </summary>
     /// <param name="request">Request parameters including encrypted card_details</param>
     /// <returns>JSON response containing card details</returns>
     /// <remarks>See <see href="https://nimbbl.biz/docs/api-reference/get-card-details-v-3/">Get Card Details API</see> for more details.</remarks>
     public Task<JsonElement> GetCardDetailsAsync(Dictionary<string, object?> request)
     {
-        return _apiClient.Post<Dictionary<string, object?>, JsonElement>(ApiConstants.CheckoutGetCardDetails, request);
+        return ApiClient.Post<Dictionary<string, object?>, JsonElement>(ApiConstants.CheckoutGetCardDetails, request);
     }
 
     /// <summary>
     /// Validate a UPI VPA (Virtual Payment Address).
+    /// Merchant token is automatically generated and used for authentication.
     /// </summary>
     /// <param name="request">Request parameters including upi_id</param>
     /// <returns>JSON response containing VPA validation result</returns>
     /// <remarks>See <see href="https://nimbbl.biz/docs/api-reference/validate-upi-vpa-v-3/">Validate UPI VPA API</see> for more details.</remarks>
     public Task<JsonElement> ValidateUpiVpaAsync(Dictionary<string, object?> request)
     {
-        return _apiClient.Post<Dictionary<string, object?>, JsonElement>(ApiConstants.CheckoutValidateVpa, request);
+        return ApiClient.Post<Dictionary<string, object?>, JsonElement>(ApiConstants.CheckoutValidateVpa, request);
     }
 
     /// <summary>
     /// Get UPI app details.
+    /// Merchant token is automatically generated and used for authentication.
     /// </summary>
     /// <param name="request">Request parameters</param>
     /// <returns>JSON response containing UPI app details</returns>
     /// <remarks>See <see href="https://nimbbl.biz/docs/api-reference/get-upi-app-details-v-3/">Get UPI App Details API</see> for more details.</remarks>
     public Task<JsonElement> GetUpiAppDetailsAsync(Dictionary<string, object?> request)
     {
-        return _apiClient.Post<Dictionary<string, object?>, JsonElement>(ApiConstants.CheckoutGetUpiAppDetails, request);
+        return ApiClient.Post<Dictionary<string, object?>, JsonElement>(ApiConstants.CheckoutGetUpiAppDetails, request);
     }
 }
 

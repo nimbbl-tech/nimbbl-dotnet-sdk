@@ -636,7 +636,7 @@ From the SDK root:
 dotnet run --project Examples/Examples.csproj
 ```
 
-You will see a menu similar to the PHP `cli.php`:
+You will see a menu:
 ```
 Select an example to run:
 1. Create Order
@@ -653,7 +653,7 @@ Select an example to run:
 0. Exit
 ```
 
-Interactive prompts mirror the PHP CLI:
+Interactive prompts:
 - **Payments > Initiate Payment**: prompts for payment mode (default `net_banking`), hints common bank codes (hdfc, icic, sbi, axis, kotak, pnb), defaults bank code to `hdfc`, asks for callback URL (default `https://example.com/callback`), and if OTP is required will prompt for OTP and complete the payment.
 - **Checkout Utilities > List Banks**: supports three flows—`order_id` only, `total_amount` + `currency` without `order_id`, and empty request body. Prints `bank_list` with `bank_name`, `code`, `health_status`, and `additional_charges` when present.
 

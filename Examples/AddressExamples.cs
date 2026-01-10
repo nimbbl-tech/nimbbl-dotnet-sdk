@@ -12,12 +12,10 @@ public static class AddressExamples
     private static async Task<JsonElement?> FindAddressByIdViaListAsync(
         NimbblApi api,
         string addressId,
-        string userId,
-        string token)
+        string userId)
     {
         var list = await api.Addresses().ListAddressesAsync(
-            new Dictionary<string, object?> { ["user_id"] = userId },
-            token);
+            new Dictionary<string, object?> { ["user_id"] = userId });
 
         // List can be:
         // - { "addresses": [ { "address": { ... }, ... }, ... ] }   (documented)
@@ -108,14 +106,7 @@ public static class AddressExamples
     {
         try
         {
-            var token = Helpers.GetInput("Enter Order Token: ", false);
-            if (string.IsNullOrWhiteSpace(token))
-            {
-                Helpers.PrintError("Order Token is required.\n");
-                return;
-            }
-            // Pass token explicitly (do not mutate global bearer token state)
-            
+            // Merchant token is automatically generated and used for authentication
             Dictionary<string, object?> data = [];
             
             // user_id - required for listing addresses
@@ -149,7 +140,7 @@ public static class AddressExamples
                 }
             }
             
-            var result = await api.Addresses().ListAddressesAsync(data, token);
+            var result = await api.Addresses().ListAddressesAsync(data);
             
             if (result.ValueKind == JsonValueKind.Object && result.TryGetProperty("error", out var errorProp))
             {
@@ -171,14 +162,7 @@ public static class AddressExamples
     {
         try
         {
-            var token = Helpers.GetInput("Enter Order Token: ", false);
-            if (string.IsNullOrWhiteSpace(token))
-            {
-                Helpers.PrintError("Order Token is required.\n");
-                return;
-            }
-            // Pass token explicitly (do not mutate global bearer token state)
-            
+            // Merchant token is automatically generated and used for authentication
             var userId = Helpers.GetInput("Enter User ID (optional): ", false);
             Helpers.PrintInfo("Enter address details:\n");
             
@@ -252,7 +236,7 @@ public static class AddressExamples
             data["amount"] = !string.IsNullOrWhiteSpace(amountStr) && decimal.TryParse(amountStr, out var amt) ? amt : 5000m;
             data["currency"] = currency ?? "INR";
             
-            var result = await api.Addresses().CreateAddressAsync(data, token);
+            var result = await api.Addresses().CreateAddressAsync(data);
             
             if (result.ValueKind == JsonValueKind.Object && result.TryGetProperty("error", out var errorProp))
             {
@@ -274,14 +258,7 @@ public static class AddressExamples
     {
         try
         {
-            var token = Helpers.GetInput("Enter Order Token: ", false);
-            if (string.IsNullOrWhiteSpace(token))
-            {
-                Helpers.PrintError("Order Token is required.\n");
-                return;
-            }
-            // Pass token explicitly (do not mutate global bearer token state)
-            
+            // Merchant token is automatically generated and used for authentication
             var addressId = Helpers.GetInput("Enter Address ID: ");
             if (string.IsNullOrWhiteSpace(addressId))
             {
@@ -304,7 +281,7 @@ public static class AddressExamples
             Dictionary<string, object?> currentAddress;
             try
             {
-                var found = await FindAddressByIdViaListAsync(api, addressId, userIdForLookup!, token);
+                var found = await FindAddressByIdViaListAsync(api, addressId, userIdForLookup!);
                 if (found == null)
                     throw new Exception($"Address not found under user_id={userIdForLookup}.");
 
@@ -314,7 +291,7 @@ public static class AddressExamples
             catch (AuthenticationException authEx)
             {
                 Helpers.PrintError($"Failed to fetch existing address details: {authEx.Message}\n");
-                Helpers.PrintInfo("This API expects a valid (non-expired) order token. Create a new order to get a fresh order token, then retry.\n");
+                Helpers.PrintInfo("This API expects valid authentication. Merchant token is automatically generated.\n");
                 return;
             }
             catch (Exception ex)
@@ -442,7 +419,7 @@ public static class AddressExamples
                 return;
             }
             
-            var result = await api.Addresses().UpdateAddressAsync(addressId, payloadPreview, token);
+            var result = await api.Addresses().UpdateAddressAsync(addressId, payloadPreview);
             
             if (result.ValueKind == JsonValueKind.Object && result.TryGetProperty("error", out var errorProp))
             {
@@ -464,14 +441,7 @@ public static class AddressExamples
     {
         try
         {
-            var token = Helpers.GetInput("Enter Order Token: ", false);
-            if (string.IsNullOrWhiteSpace(token))
-            {
-                Helpers.PrintError("Order Token is required.\n");
-                return;
-            }
-            // Pass token explicitly (do not mutate global bearer token state)
-            
+            // Merchant token is automatically generated and used for authentication
             var addressId = Helpers.GetInput("Enter Address ID: ");
             if (string.IsNullOrWhiteSpace(addressId))
             {
@@ -479,7 +449,7 @@ public static class AddressExamples
                 return;
             }
             
-            var result = await api.Addresses().DeleteAddressAsync(addressId, token);
+            var result = await api.Addresses().DeleteAddressAsync(addressId);
             
             if (result.ValueKind == JsonValueKind.Object && result.TryGetProperty("error", out var errorProp))
             {
@@ -503,14 +473,7 @@ public static class AddressExamples
     {
         try
         {
-            var token = Helpers.GetInput("Enter Order Token: ", false);
-            if (string.IsNullOrWhiteSpace(token))
-            {
-                Helpers.PrintError("Order Token is required.\n");
-                return;
-            }
-            // Pass token explicitly (do not mutate global bearer token state)
-            
+            // Merchant token is automatically generated and used for authentication
             Helpers.PrintInfo("Import addresses from a provider (e.g., shiprocket)\n");
             Helpers.PrintInfo("This is a two-step process:\n");
             Helpers.PrintInfo("1. First call 'auth' command to initiate import\n");
@@ -560,7 +523,7 @@ public static class AddressExamples
                 return;
             }
             
-            var result = await api.Addresses().ImportAddressesAsync(importData, token);
+            var result = await api.Addresses().ImportAddressesAsync(importData);
             
             if (result.ValueKind == JsonValueKind.Object && result.TryGetProperty("error", out var errorProp))
             {
@@ -606,14 +569,7 @@ public static class AddressExamples
     {
         try
         {
-            var token = Helpers.GetInput("Enter Order Token: ", false);
-            if (string.IsNullOrWhiteSpace(token))
-            {
-                Helpers.PrintError("Order Token is required.\n");
-                return;
-            }
-            // Pass token explicitly (do not mutate global bearer token state)
-            
+            // Merchant token is automatically generated and used for authentication
             Helpers.PrintInfo("Enter eligibility check details:\n");
             var pincode = Helpers.GetInput("Pincode (required): ");
             if (string.IsNullOrWhiteSpace(pincode))
@@ -642,7 +598,7 @@ public static class AddressExamples
                 data["currency"] = currency;
             }
             
-            var result = await api.Addresses().CheckAddressEligibilityAsync(data, token);
+            var result = await api.Addresses().CheckAddressEligibilityAsync(data);
             
             if (result.ValueKind == JsonValueKind.Object && result.TryGetProperty("error", out var errorProp))
             {
@@ -678,14 +634,7 @@ public static class AddressExamples
     {
         try
         {
-            var token = Helpers.GetInput("Enter Order Token: ", false);
-            if (string.IsNullOrWhiteSpace(token))
-            {
-                Helpers.PrintError("Order Token is required.\n");
-                return;
-            }
-            // Pass token explicitly (do not mutate global bearer token state)
-            
+            // Merchant token is automatically generated and used for authentication
             var addressId = Helpers.GetInput("Enter Address ID (required): ");
             if (string.IsNullOrWhiteSpace(addressId))
             {
@@ -693,7 +642,7 @@ public static class AddressExamples
                 return;
             }
             
-            var orderId = Helpers.GetInput("Enter Order ID (optional, not required if using order token): ", false);
+            var orderId = Helpers.GetInput("Enter Order ID (optional): ", false);
             Console.WriteLine("Link as:\n");
             Console.WriteLine("1. shipping\n");
             Console.WriteLine("2. billing\n");
@@ -719,7 +668,7 @@ public static class AddressExamples
                 linkData["order_id"] = orderId;
             }
             
-            var result = await api.Addresses().LinkAddressWithOrderAsync(linkData, token);
+            var result = await api.Addresses().LinkAddressWithOrderAsync(linkData);
             
             if (result.ValueKind == JsonValueKind.Object && result.TryGetProperty("error", out var errorProp))
             {

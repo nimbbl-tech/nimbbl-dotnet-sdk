@@ -49,7 +49,7 @@ public class Util
         {
             var logger = Log.Logger.GetInstance();
             
-            var invoiceId = TryGetString(order, "invoice_id") ?? TryGetString(attributes, "invoice_id");
+            var invoiceId = TryGetString(order, JsonKeys.InvoiceId) ?? TryGetString(attributes, JsonKeys.InvoiceId);
             var transactionType = TryGetString(txn, "transaction_type") ?? TryGetString(txn, "type");
             var eventType = TryGetString(attributes, "event_type");
 
@@ -79,7 +79,7 @@ public class Util
             }
 
             var missing = new List<string>();
-            if (string.IsNullOrEmpty(invoiceId)) missing.Add("invoice_id");
+            if (string.IsNullOrEmpty(invoiceId)) missing.Add(JsonKeys.InvoiceId);
             if (string.IsNullOrEmpty(transactionId)) missing.Add("transaction_id");
             if (transactionAmount == null) missing.Add("transaction_amount");
             if (string.IsNullOrEmpty(transactionCurrency)) missing.Add("transaction_currency");
