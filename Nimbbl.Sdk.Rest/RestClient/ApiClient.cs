@@ -171,7 +171,7 @@ internal class ApiClient : IDisposable
         HttpResponseMessage httpResponse;
         try
         {
-            httpResponse = await RetryRequestAsync(async (req, ci) => await SendRequestAsync(req, ci), message, 1, callerInfo);
+            httpResponse = await RetryRequestAsync(async (req, ci) => await SendRequestAsync(req, ci), message, ApiConstants.DefaultRetryCount, callerInfo);
         }
         catch (System.Exception ex)
         {
@@ -325,6 +325,7 @@ internal class ApiClient : IDisposable
     /// <summary>
     /// Retries a request if it fails, with automatic token refresh on auth failures
     /// Merchant token is automatically generated and used for authentication
+    /// retryCount: Number of retry attempts (1 = 1 retry = 2 total attempts)
     /// </summary>
     private async Task<HttpResponseMessage> RetryRequestAsync(Func<HttpRequestMessage, (string Module, string Function, int Line)?, Task<HttpResponseMessage>> sendRequest, HttpRequestMessage message, ushort retryCount, (string Module, string Function, int Line)? callerInfo = null)
     {
@@ -338,10 +339,14 @@ internal class ApiClient : IDisposable
             }
             if (IsAuthFailure(response))
             {
+                // Clear all token caches to force regeneration on retry
                 _tokenDoc?.Dispose();
                 _tokenDoc = null;
+                _explicitBearerToken = null;
+                _explicitTokenExpiryUtc = null;
+                _logger.InfoWithCaller("Authentication failure detected. Clearing token cache for retry.", callerInfo);
             }
-        } while (retryCount-- != 0);
+        } while (retryCount-- > 0);
         await HandleErrorResponseAsync(response, callerInfo);
         return response;
     }

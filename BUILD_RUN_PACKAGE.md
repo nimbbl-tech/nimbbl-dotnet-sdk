@@ -754,7 +754,7 @@ Edit `Nimbbl.Sdk.Rest/Nimbbl.Sdk.Rest.csproj`:
 ---
 
 **Last Updated**: 2025-01-26  
-**SDK Version**: 1.3.5-rc3  
+**SDK Version**: 1.3.5-rc5  
 **Target Framework**: .NET 8.0
 
 ## Configuration

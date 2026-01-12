@@ -75,5 +75,10 @@ internal static class ApiConstants
     // HTTP client timeout (in seconds)
     // Default timeout for all HTTP requests (read/write operations)
     public const int DefaultHttpTimeoutSeconds = 60; // 1 minute
+
+    // Retry configuration
+    // Number of retry attempts for failed requests (1 = 1 retry = 2 total attempts)
+    // When authentication failure (401/403) is detected, tokens are cleared and request is retried
+    public const ushort DefaultRetryCount = 1;
 }
 
