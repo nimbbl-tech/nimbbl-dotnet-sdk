@@ -1,4 +1,6 @@
+using System;
 using Nimbbl.Sdk.Rest.Common;
+using Nimbbl.Sdk.Rest.RestClient;
 
 namespace Nimbbl.Sdk.Rest.Log;
 
@@ -16,14 +18,21 @@ public class Logger
 
     private static Logger? _instance;
     private static bool _enableDebugLogging;
-    private static bool _loggingEnabled = false;
+    // Logging is always enabled (INFO, WARNING, ERROR logs are always printed)
+    // Only DEBUG logs are controlled by _enableDebugLogging flag
 
     private readonly string? _logFilePath;
     private readonly object _sync = new();
 
     private Logger(string? logFilePath = null, bool alreadyHasDateSuffix = false)
     {
-        _logFilePath = alreadyHasDateSuffix ? logFilePath : AddDateSuffixToLogFile(logFilePath);
+        var pathWithDate = alreadyHasDateSuffix ? logFilePath : AddDateSuffixToLogFile(logFilePath);
+        // Resolve relative paths to absolute paths
+        _logFilePath = string.IsNullOrWhiteSpace(pathWithDate) 
+            ? null 
+            : Path.IsPathRooted(pathWithDate) 
+                ? pathWithDate 
+                : Path.Combine(Directory.GetCurrentDirectory(), pathWithDate);
     }
 
     /// <summary>
@@ -64,26 +73,93 @@ public class Logger
     public static Logger GetInstance(string? logFilePath = null)
     {
         var filePathWithDate = AddDateSuffixToLogFile(logFilePath);
-        // If instance exists with different file, reset
-        if (_instance != null && filePathWithDate != null && _instance._logFilePath != filePathWithDate)
+        // Resolve to absolute path for comparison
+        var absoluteFilePathWithDate = string.IsNullOrWhiteSpace(filePathWithDate) 
+            ? null 
+            : Path.IsPathRooted(filePathWithDate) 
+                ? filePathWithDate 
+                : Path.Combine(Directory.GetCurrentDirectory(), filePathWithDate);
+        
+        // If instance exists, check if we need to reset due to date change
+        if (_instance != null)
         {
-            _instance = null;
+            // Check if file path is different (including date change) - compare absolute paths
+            if (absoluteFilePathWithDate != null && _instance._logFilePath != absoluteFilePathWithDate)
+            {
+                _instance = null;
+            }
+            // Also check if the existing instance's file path has an old date suffix
+            else if (_instance._logFilePath != null && absoluteFilePathWithDate != null)
+            {
+                var existingPath = _instance._logFilePath;
+                var todaySuffix = DateTime.Now.ToString("ddMMyyyy");
+                
+                // Extract date suffix from existing path if it has one
+                var existingFileName = Path.GetFileNameWithoutExtension(existingPath);
+                var existingHasDateSuffix = false;
+                string? existingDateSuffix = null;
+                
+                if (existingFileName.Length >= 9)
+                {
+                    var maybeSuffix = existingFileName.Substring(existingFileName.Length - 9);
+                    if (maybeSuffix[0] == '_' && maybeSuffix.Skip(1).All(char.IsDigit))
+                    {
+                        existingHasDateSuffix = true;
+                        existingDateSuffix = maybeSuffix.Substring(1); // Remove the underscore
+                    }
+                }
+                
+                // Check if new path has date suffix
+                var newFileName = Path.GetFileNameWithoutExtension(absoluteFilePathWithDate);
+                var newHasDateSuffix = false;
+                if (newFileName.Length >= 9)
+                {
+                    var maybeSuffix = newFileName.Substring(newFileName.Length - 9);
+                    if (maybeSuffix[0] == '_' && maybeSuffix.Skip(1).All(char.IsDigit))
+                    {
+                        newHasDateSuffix = true;
+                    }
+                }
+                
+                // Reset if: old path has date suffix but doesn't match today, OR old path has no date suffix but new one does
+                if (existingHasDateSuffix && existingDateSuffix != todaySuffix)
+                {
+                    _instance = null;
+                }
+                else if (!existingHasDateSuffix && newHasDateSuffix)
+                {
+                    // Old file doesn't have date suffix, but new one should - reset to create new file
+                    _instance = null;
+                }
+            }
         }
+        
         // Pass already-calculated path with date suffix to avoid recalculating
-        _instance ??= new Logger(filePathWithDate, alreadyHasDateSuffix: true);
+        if (_instance == null)
+        {
+            _instance = new Logger(filePathWithDate, alreadyHasDateSuffix: true);
+            // Debug: Log the resolved log file path (only on first initialization to avoid spam)
+            if (!string.IsNullOrWhiteSpace(_instance._logFilePath))
+            {
+                Console.WriteLine($"[LOGGER INFO] Log file: {_instance._logFilePath}");
+            }
+            else
+            {
+                Console.WriteLine("[LOGGER WARNING] Log file path is null or empty - logging to console only");
+            }
+        }
         return _instance;
     }
 
     public static void EnableDebug() => _enableDebugLogging = true;
-    public static void EnableLogging() => _loggingEnabled = true;
+    public static void DisableDebug() => _enableDebugLogging = false;
     public static bool IsDebugEnabled() => _enableDebugLogging;
 
     /// <summary>
-    /// Log INFO with optional caller info (gets caller info from logger if not provided)
+    /// Log INFO with optional caller info (always printed, debug logging is controlled separately)
     /// </summary>
     public void InfoWithCaller(string message, (string Module, string Function, int Line)? callerInfo = null)
     {
-        if (!_loggingEnabled) return;
         var (module, function, line) = callerInfo ?? GetCaller();
         var formattedMessage = FormatMessage(message, null);
         Write(LogLevelInfo, formattedMessage, module, line, function);
@@ -100,11 +176,11 @@ public class Logger
     }
     
     /// <summary>
-    /// Log DEBUG with optional caller info (gets caller info from logger if not provided)
+    /// Log DEBUG with optional caller info (only printed when debug logging is enabled)
     /// </summary>
     public void DebugWithCaller(string message, (string Module, string Function, int Line)? callerInfo = null)
     {
-        if (!_loggingEnabled || !_enableDebugLogging) return;
+        if (!_enableDebugLogging) return;
         var (module, function, line) = callerInfo ?? GetCaller();
         var formattedMessage = FormatMessage(message, null);
         Write(LogLevelDebug, formattedMessage, module, line, function);
@@ -132,7 +208,7 @@ public class Logger
 
     private void Write(string level, string message, string module, int line, string function)
     {
-        // Debug logging check (caller methods handle _loggingEnabled check)
+        // Debug logging check (only DEBUG logs are gated)
         if (level.Equals(LogLevelDebug, StringComparison.OrdinalIgnoreCase) && !_enableDebugLogging) return;
 
         // Format: [timestamp][sdk sdkVersion][level][module:line][function]: message
@@ -147,18 +223,30 @@ public class Logger
             {
                 lock (_sync)
                 {
-                    var dir = Path.GetDirectoryName(_logFilePath);
+                    // _logFilePath is already absolute (resolved in constructor), but double-check
+                    var absoluteLogPath = Path.IsPathRooted(_logFilePath) 
+                        ? _logFilePath 
+                        : Path.Combine(Directory.GetCurrentDirectory(), _logFilePath);
+                    
+                    var dir = Path.GetDirectoryName(absoluteLogPath);
                     if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
                     {
                         Directory.CreateDirectory(dir);
                     }
-                    File.AppendAllText(_logFilePath!, logLine + Environment.NewLine);
+                    File.AppendAllText(absoluteLogPath, logLine + Environment.NewLine);
                 }
             }
-            catch
+            catch (System.Exception ex)
             {
-                // Ignore logging failures
+                // Log to console if file logging fails (but don't throw to avoid breaking the application)
+                Console.WriteLine($"[LOGGER ERROR] Failed to write to log file '{_logFilePath}': {ex.Message}");
+                Console.WriteLine($"[LOGGER ERROR] Stack trace: {ex.StackTrace}");
             }
+        }
+        else
+        {
+            // Debug: Log when _logFilePath is null/empty
+            Console.WriteLine($"[LOGGER WARNING] Log file path is null or empty. Logging to console only.");
         }
 
         // Also write to stdout for CLI parity
@@ -193,6 +281,14 @@ public class Logger
         "ApiClient", "Logger"
     };
 
+    // Type information for skipping internal SDK types from stack traces
+    private static readonly string ApiClientTypeName = typeof(ApiClient).Name;
+    private static readonly string ApiClientFullName = typeof(ApiClient).FullName ?? "";
+    private static readonly string ApiClientNamespace = typeof(ApiClient).Namespace ?? "";
+    private static readonly string LoggerTypeName = typeof(Logger).Name;
+    private static readonly string LoggerFullName = typeof(Logger).FullName ?? "";
+    private static readonly string LoggerNamespace = typeof(Logger).Namespace ?? "";
+
     internal static (string Module, string Function, int Line) GetCaller()
     {
         var stack = new System.Diagnostics.StackTrace(true);
@@ -226,19 +322,19 @@ public class Logger
                 var namespaceName = declaringType.Namespace ?? "";
 
                 // Skip ApiClient type (check by name, full name, or namespace)
-                if (typeName.Equals("ApiClient", StringComparison.OrdinalIgnoreCase) ||
-                    fullTypeName.Equals("Nimbbl.Sdk.Rest.RestClient.ApiClient", StringComparison.OrdinalIgnoreCase) ||
-                    (namespaceName.Contains("Nimbbl.Sdk.Rest.RestClient", StringComparison.OrdinalIgnoreCase) && 
-                     typeName.Equals("ApiClient", StringComparison.OrdinalIgnoreCase)))
+                if (typeName.Equals(ApiClientTypeName, StringComparison.OrdinalIgnoreCase) ||
+                    fullTypeName.Equals(ApiClientFullName, StringComparison.OrdinalIgnoreCase) ||
+                    (namespaceName.Contains(ApiClientNamespace, StringComparison.OrdinalIgnoreCase) && 
+                     typeName.Equals(ApiClientTypeName, StringComparison.OrdinalIgnoreCase)))
                 {
                     continue;
                 }
 
                 // Skip Logger type (check by name, full name, or namespace)
-                if (typeName.Equals("Logger", StringComparison.OrdinalIgnoreCase) ||
-                    fullTypeName.Equals("Nimbbl.Sdk.Rest.Log.Logger", StringComparison.OrdinalIgnoreCase) ||
-                    (namespaceName.Contains("Nimbbl.Sdk.Rest.Log", StringComparison.OrdinalIgnoreCase) && 
-                     typeName.Equals("Logger", StringComparison.OrdinalIgnoreCase)))
+                if (typeName.Equals(LoggerTypeName, StringComparison.OrdinalIgnoreCase) ||
+                    fullTypeName.Equals(LoggerFullName, StringComparison.OrdinalIgnoreCase) ||
+                    (namespaceName.Contains(LoggerNamespace, StringComparison.OrdinalIgnoreCase) && 
+                     typeName.Equals(LoggerTypeName, StringComparison.OrdinalIgnoreCase)))
                 {
                     continue;
                 }
@@ -284,14 +380,14 @@ public class Logger
                                 var actualFullTypeName = actualDeclaringType.FullName ?? "";
                                 var actualNamespaceName = actualDeclaringType.Namespace ?? "";
                                 
-                                if (actualTypeName.Equals("ApiClient", StringComparison.OrdinalIgnoreCase) ||
-                                    actualFullTypeName.Equals("Nimbbl.Sdk.Rest.RestClient.ApiClient", StringComparison.OrdinalIgnoreCase) ||
-                                    (actualNamespaceName.Contains("Nimbbl.Sdk.Rest.RestClient", StringComparison.OrdinalIgnoreCase) && 
-                                     actualTypeName.Equals("ApiClient", StringComparison.OrdinalIgnoreCase)) ||
-                                    actualTypeName.Equals("Logger", StringComparison.OrdinalIgnoreCase) ||
-                                    actualFullTypeName.Equals("Nimbbl.Sdk.Rest.Log.Logger", StringComparison.OrdinalIgnoreCase) ||
-                                    (actualNamespaceName.Contains("Nimbbl.Sdk.Rest.Log", StringComparison.OrdinalIgnoreCase) && 
-                                     actualTypeName.Equals("Logger", StringComparison.OrdinalIgnoreCase)))
+                                if (actualTypeName.Equals(ApiClientTypeName, StringComparison.OrdinalIgnoreCase) ||
+                                    actualFullTypeName.Equals(ApiClientFullName, StringComparison.OrdinalIgnoreCase) ||
+                                    (actualNamespaceName.Contains(ApiClientNamespace, StringComparison.OrdinalIgnoreCase) && 
+                                     actualTypeName.Equals(ApiClientTypeName, StringComparison.OrdinalIgnoreCase)) ||
+                                    actualTypeName.Equals(LoggerTypeName, StringComparison.OrdinalIgnoreCase) ||
+                                    actualFullTypeName.Equals(LoggerFullName, StringComparison.OrdinalIgnoreCase) ||
+                                    (actualNamespaceName.Contains(LoggerNamespace, StringComparison.OrdinalIgnoreCase) && 
+                                     actualTypeName.Equals(LoggerTypeName, StringComparison.OrdinalIgnoreCase)))
                                 {
                                     continue;
                                 }

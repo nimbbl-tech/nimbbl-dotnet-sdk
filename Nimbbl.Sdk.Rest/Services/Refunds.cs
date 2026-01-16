@@ -43,7 +43,7 @@ public class Refunds : BaseService
             catch (System.Exception ex)
             {
                 Logger.ExceptionWithCaller(string.Format(ErrorMessages.EncryptionErrorFormat, "refund", ex.Message), ex);
-                throw new NimbblException(string.Format(ErrorMessages.EncryptionErrorFormat, "refund", ex.Message), 500, ErrorCodes.EncryptionError);
+                throw new NimbblException(string.Format(ErrorMessages.EncryptionErrorFormat, "refund", ex.Message), HttpStatusCodes.Unknown, ErrorCodes.EncryptionError);
             }
         }
         else
@@ -54,4 +54,3 @@ public class Refunds : BaseService
         return ApiClient.Post<Dictionary<string, object?>, JsonElement>(ApiConstants.RefundInitiate, request);
     }
 }
-

@@ -24,10 +24,10 @@ public static class Helpers
             return new string(chars);
         }
 
-        // Example: Nimbbl_NETSDK-INV-20260106104039999-1a2b3c4d5e6f
+        // Example: NETSDK-INV-20260106104039999-1a2b3c4d5e6f
         // Note: We intentionally avoid referencing SDK internals (e.g., SdkConstants) from Examples.
         // Keep this stable and aligned with the logger's visible SDK label.
-        var sdkPrefix = Sanitize(string.IsNullOrWhiteSpace(sdkPrefixOverride) ? "Nimbbl_NETSDK" : sdkPrefixOverride);
+        var sdkPrefix = Sanitize(string.IsNullOrWhiteSpace(sdkPrefixOverride) ? "NETSDK" : sdkPrefixOverride);
         var safeTag = Sanitize(tag);
         return $"{sdkPrefix}-{safeTag}-{DateTime.UtcNow:yyyyMMddHHmmssfff}-{Guid.NewGuid().ToString("N")[..12]}";
     }
@@ -122,6 +122,38 @@ public static class Helpers
             Console.Write($" - {description}");
         }
         Console.WriteLine();
+    }
+
+    /// <summary>
+    /// Get environment variable as string (returns null if not set or empty)
+    /// </summary>
+    public static string? GetEnvString(string variableName)
+    {
+        return Environment.GetEnvironmentVariable(variableName);
+    }
+
+    /// <summary>
+    /// Get environment variable as nullable bool (returns null if not set, true/false if set)
+    /// </summary>
+    public static bool? GetEnvBool(string variableName)
+    {
+        var value = Environment.GetEnvironmentVariable(variableName);
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+        
+        return bool.TryParse(value, out var result) ? result : null;
+    }
+
+    /// <summary>
+    /// Get environment variable as bool with default value (returns default if not set or invalid)
+    /// </summary>
+    public static bool GetEnvBool(string variableName, bool defaultValue)
+    {
+        var value = Environment.GetEnvironmentVariable(variableName);
+        if (string.IsNullOrWhiteSpace(value))
+            return defaultValue;
+        
+        return bool.TryParse(value, out var result) ? result : defaultValue;
     }
 }
 

@@ -43,7 +43,7 @@ internal static class ApiConstants
     public const string CheckoutListEmis = $"{ApiVersion}/emis";
     public const string CheckoutOffers = $"{ApiVersion}/offers";
     public const string CheckoutGetBinData = $"{ApiVersion}/get-bin-data";
-    public const string CheckoutGetCardDetails = $"{ApiVersion}/get-card-details";
+    public const string CheckoutGetCardDetails = $"{ApiVersion}/cards";
     public const string CheckoutValidateVpa = $"{ApiVersion}/validate-vpa";
     public const string CheckoutGetUpiAppDetails = $"{ApiVersion}/get-upi-app-details";
 

@@ -494,8 +494,8 @@ dotnet add package Nimbbl.Sdk.Rest
 nimbbl-dotnet-sdk/
 ├── Nimbbl.Sdk.Rest/              # Main SDK library
 │   ├── Api/                      # Main API entry point
-│   │   └── NimbblApi.cs          # NimbblApi class (main facade)
-│   ├── NimbblClient.cs           # Main client class
+│   │   ├── NimbblApi.cs          # NimbblApi class (main facade)
+│   │   └── NimbblClient.cs       # Internal client (used by NimbblApi)
 │   ├── Orders/                   # Orders API
 │   │   └── Orders.cs
 │   ├── Addresses/                # Addresses API
@@ -508,7 +508,7 @@ nimbbl-dotnet-sdk/
 │   ├── NimbblCheckout/           # Checkout client
 │   ├── Common/                   # Common utilities
 │   │   ├── Encryption.cs
-│   │   ├── Util.cs
+│   │   ├── SignatureVerifier.cs
 │   │   └── EnvLoader.cs
 │   ├── Exception/                 # Exception classes
 │   ├── Log/                      # Logging
@@ -754,7 +754,7 @@ Edit `Nimbbl.Sdk.Rest/Nimbbl.Sdk.Rest.csproj`:
 ---
 
 **Last Updated**: 2025-01-26  
-**SDK Version**: 1.3.5-rc5  
+**SDK Version**: 1.3.5-rc6  
 **Target Framework**: .NET 8.0
 
 ## Configuration

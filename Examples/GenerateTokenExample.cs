@@ -18,8 +18,8 @@ public static class GenerateTokenExample
             Console.WriteLine("Generating authentication token...");
             Console.WriteLine(new string('-', 50));
             Console.WriteLine("Request:");
-            Console.WriteLine($"  access_key: {api.GetType().Name}"); // Note: In real usage, key is in config
-            Console.WriteLine("  access_secret: " + new string('*', 20));
+            // Note: access_key and access_secret are automatically masked in SDK logs
+            // Format in logs: First 4 chars + **** + last 4 chars (e.g., "Nimb****7890")
             Console.WriteLine();
             
             // Use Auth API client to generate token
@@ -39,7 +39,14 @@ public static class GenerateTokenExample
                     ? expProp.GetString() 
                     : "N/A";
                 
-                Console.WriteLine($"   Token: {(token != "N/A" ? token : "N/A")}");
+                // Mask token for security (show first 5 and last 7 characters)
+                var maskedToken = token != "N/A" && !string.IsNullOrEmpty(token) && token.Length > 12
+                    ? $"{token.Substring(0, 5)}***********{token.Substring(token.Length - 7)}"
+                    : token != "N/A" && !string.IsNullOrEmpty(token)
+                    ? new string('*', token.Length)
+                    : "N/A";
+                
+                Console.WriteLine($"   Token: {maskedToken}");
                 Console.WriteLine($"   Expires At: {expiresAt}");
                 
                 Helpers.PrintInfo("Token can be used for subsequent API calls.\n");

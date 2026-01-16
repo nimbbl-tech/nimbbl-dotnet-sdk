@@ -44,7 +44,7 @@ public class Orders : BaseService
             catch (System.Exception ex)
             {
                 Logger.ExceptionWithCaller(string.Format(ErrorMessages.EncryptionErrorFormat, "order", ex.Message), ex);
-                throw new NimbblException(string.Format(ErrorMessages.EncryptionErrorFormat, "order", ex.Message), 500, ErrorCodes.EncryptionError);
+                throw new NimbblException(string.Format(ErrorMessages.EncryptionErrorFormat, "order", ex.Message), HttpStatusCodes.Unknown, ErrorCodes.EncryptionError);
             }
         }
         else

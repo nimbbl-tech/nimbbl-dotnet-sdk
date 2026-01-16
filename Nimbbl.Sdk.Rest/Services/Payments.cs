@@ -45,4 +45,3 @@ public class Payments : BaseService
         return ApiClient.Post<Dictionary<string, object?>, JsonElement>(ApiConstants.PaymentResendOtp, request);
     }
 }
-

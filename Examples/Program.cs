@@ -8,16 +8,15 @@ try
     // Load .env file - sample app is responsible for loading environment variables
     EnvLoader.LoadEnvFile();
     
-    // Read configuration from environment variables
-    var accessKey = Environment.GetEnvironmentVariable("NIMBBL_ACCESS_KEY");
-    var accessSecret = Environment.GetEnvironmentVariable("NIMBBL_ACCESS_SECRET");
-    var apiHost = Environment.GetEnvironmentVariable("NIMBBL_API_HOST");
-    var enableLogging = bool.TryParse(Environment.GetEnvironmentVariable("NIMBBL_ENABLE_LOGGING"), out var enableLog) ? enableLog : (bool?)null;
-    var debugLogging = bool.TryParse(Environment.GetEnvironmentVariable("NIMBBL_DEBUG_LOGGING"), out var debugLog) ? debugLog : (bool?)null;
-    var logFilePath = Environment.GetEnvironmentVariable("NIMBBL_LOG_FILE");
+    // Read configuration from environment variables using utility methods
+    var accessKey = Helpers.GetEnvString("NIMBBL_ACCESS_KEY");
+    var accessSecret = Helpers.GetEnvString("NIMBBL_ACCESS_SECRET");
+    var apiHost = Helpers.GetEnvString("NIMBBL_API_HOST");
+    var debugLogging = Helpers.GetEnvBool("NIMBBL_DEBUG_LOGGING");
+    var logFilePath = Helpers.GetEnvString("NIMBBL_LOG_FILE");
     
     // Read encryption flags (available in all environments)
-    var encryptPayload = bool.TryParse(Environment.GetEnvironmentVariable("ENCRYPT_PAYLOAD"), out var encryptPay) && encryptPay;
+    var encryptPayload = Helpers.GetEnvBool("ENCRYPT_PAYLOAD", defaultValue: false);
     
     // Validate required configuration
     if (string.IsNullOrEmpty(accessKey) || accessKey == "your_access_key_here")
@@ -27,6 +26,7 @@ try
         Helpers.PrintInfo("  - NIMBBL_ACCESS_KEY\n");
         Helpers.PrintInfo("  - NIMBBL_ACCESS_SECRET\n");
         Helpers.PrintInfo("  - NIMBBL_API_HOST (optional, defaults to production)\n");
+        Helpers.PrintInfo("  - NIMBBL_DEBUG_LOGGING (optional, defaults to false)\n");
         Helpers.PrintInfo("  - ENCRYPT_PAYLOAD (optional, defaults to false)\n");
         return;
     }
@@ -39,13 +39,14 @@ try
 
     // Initialize Nimbbl API with parameters from environment variables
     // SDK accepts parameters - it doesn't load .env files itself
+    // Note: Logging (INFO, WARNING, ERROR) is always enabled by default
+    // Only DEBUG logs are controlled by NIMBBL_DEBUG_LOGGING flag
     var api = NimbblApi.Initialize(
         accessKey: accessKey!,
         accessSecret: accessSecret!,
         apiHost: apiHost,
-        enableLogging: enableLogging,
         debugLogging: debugLogging,
-        logFilePath: logFilePath ?? (enableLogging == true ? Path.Combine(AppContext.BaseDirectory, "logs", "nimbbl_debug.log") : null),
+        logFilePath: logFilePath,
         encryptPayload: encryptPayload);
 
     // Main menu loop
@@ -333,11 +334,8 @@ try
         catch (Exception ex)
         {
             Helpers.PrintException(ex);
-            var loggingEnabled = bool.TryParse(Environment.GetEnvironmentVariable("NIMBBL_ENABLE_LOGGING"), out var logEnabled) && logEnabled;
-            if (loggingEnabled)
-            {
-                Console.WriteLine("Check logs/nimbbl_debug.log for details.\n");
-            }
+            // Logging is always enabled, so always show log file location
+            Console.WriteLine("Check logs/nimbbl_debug.log for details.\n");
         }
         
         Helpers.PrintSeparator();

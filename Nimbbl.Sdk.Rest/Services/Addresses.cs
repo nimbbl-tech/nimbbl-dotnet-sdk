@@ -51,31 +51,10 @@ public class Addresses : BaseService
     {
         // Per docs, Update Address expects an `address` object in the request body, including `address_id`.
         // Ref: https://nimbbl.biz/docs/api-reference/update-an-address-v-3/
-        Dictionary<string, object?> payload;
-        if (request.TryGetValue("address", out var addressObj) && addressObj is Dictionary<string, object?>)
-        {
-            payload = request;
-            var addressDict = (Dictionary<string, object?>)addressObj;
-            if (!addressDict.ContainsKey("address_id"))
-            {
-                addressDict["address_id"] = id;
-            }
-        }
-        else
-        {
-            // Treat `request` as the address fields, and wrap it.
-            var address = new Dictionary<string, object?>(request)
-            {
-                ["address_id"] = id
-            };
-            payload = new Dictionary<string, object?>
-            {
-                ["address"] = address
-            };
-        }
-
+        // Use request as-is - it should already have the correct structure with address_id inside
+        
         // Endpoint is `v3/addresses` (no /{id})
-        return ApiClient.Patch<Dictionary<string, object?>, JsonElement>(ApiConstants.AddressUpdate, payload);
+        return ApiClient.Patch<Dictionary<string, object?>, JsonElement>(ApiConstants.AddressUpdate, request);
     }
 
     /// <summary>
@@ -116,7 +95,7 @@ public class Addresses : BaseService
         // Validate required parameter
         if (!request.ContainsKey(JsonKeys.Pincode) || string.IsNullOrWhiteSpace(request[JsonKeys.Pincode]?.ToString()))
         {
-            throw new NimbblException(ErrorMessages.PincodeRequired, 400, ErrorCodes.PincodeRequired);
+            throw new NimbblException(ErrorMessages.PincodeRequired, HttpStatusCodes.BadRequest, ErrorCodes.PincodeRequired);
         }
         
         // Use GET with query parameters as per API documentation
@@ -135,4 +114,3 @@ public class Addresses : BaseService
         return ApiClient.Post<Dictionary<string, object?>, JsonElement>(ApiConstants.AddressLinkOrder, request);
     }
 }
-

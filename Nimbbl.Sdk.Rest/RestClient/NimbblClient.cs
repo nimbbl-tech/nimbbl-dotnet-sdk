@@ -1,4 +1,3 @@
-using Nimbbl.Sdk.Rest.RestClient;
 using NimbblAuth = Nimbbl.Sdk.Rest.Auth.Auth;
 using NimbblOrders = Nimbbl.Sdk.Rest.Orders.Orders;
 using NimbblPaymentLinks = Nimbbl.Sdk.Rest.PaymentLinks.PaymentLinks;
@@ -7,9 +6,15 @@ using NimbblRefunds = Nimbbl.Sdk.Rest.Refunds.Refunds;
 using NimbblAddresses = Nimbbl.Sdk.Rest.Addresses.Addresses;
 using NimbblPayments = Nimbbl.Sdk.Rest.Payments.Payments;
 using NimbblCheckoutUtilities = Nimbbl.Sdk.Rest.CheckoutUtilities.CheckoutUtilities;
-namespace Nimbbl.Sdk.Rest;
 
-public class NimbblClient : IDisposable
+namespace Nimbbl.Sdk.Rest.RestClient;
+
+/// <summary>
+/// Internal client for accessing Nimbbl API services.
+/// This class is used internally by NimbblApi and should not be used directly.
+/// Use NimbblApi.Initialize() instead.
+/// </summary>
+internal class NimbblClient : IDisposable
 {
     public NimbblOrders Orders { get; }
     public NimbblTransactions Transactions { get; }

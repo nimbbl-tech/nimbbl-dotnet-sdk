@@ -46,7 +46,7 @@ public class Transactions : BaseService
             catch (System.Exception ex)
             {
                 Logger.ExceptionWithCaller(string.Format(ErrorMessages.EncryptionErrorFormat, "transaction enquiry", ex.Message), ex);
-                throw new NimbblException(string.Format(ErrorMessages.EncryptionErrorFormat, "transaction enquiry", ex.Message), 500, ErrorCodes.EncryptionError);
+                throw new NimbblException(string.Format(ErrorMessages.EncryptionErrorFormat, "transaction enquiry", ex.Message), HttpStatusCodes.Unknown, ErrorCodes.EncryptionError);
             }
         }
         else

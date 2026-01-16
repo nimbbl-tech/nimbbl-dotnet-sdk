@@ -19,18 +19,14 @@ public class Auth : BaseService
     /// <summary>
     /// Generate token using access_key and access_secret from config
     /// Automatically caches the token for subsequent API calls
+    /// Uses the same internal token generation logic as automatic token generation
     /// </summary>
     /// <returns>JSON response containing authentication token</returns>
     /// <remarks>See <see href="https://nimbbl.biz/docs/api-reference/generate-token-v-3/">Generate Token API</see> for more details.</remarks>
     public async Task<JsonElement> GenerateTokenAsync()
     {
-        var requestBody = new Dictionary<string, object?>
-        {
-            [JsonKeys.AccessKey] = ApiClient.GetConfigKey(),
-            [JsonKeys.AccessSecret] = ApiClient.GetConfigSecret()
-        };
-        
-        var response = await ApiClient.Post<Dictionary<string, object?>, JsonElement>(ApiConstants.AuthGenerateToken, requestBody);
+        // Use internal token generation method (shared with automatic token generation)
+        var response = await ApiClient.GenerateTokenInternalAsync();
         
         // Auto-cache the token for subsequent API calls
         if (response.ValueKind == JsonValueKind.Object)

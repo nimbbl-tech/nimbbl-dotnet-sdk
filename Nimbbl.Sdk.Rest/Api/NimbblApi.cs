@@ -1,5 +1,6 @@
 using Nimbbl.Sdk.Rest.Common;
 using Nimbbl.Sdk.Rest.Log;
+using Nimbbl.Sdk.Rest.RestClient;
 using NimbblAuth = Nimbbl.Sdk.Rest.Auth.Auth;
 using NimbblOrders = Nimbbl.Sdk.Rest.Orders.Orders;
 using NimbblPaymentLinks = Nimbbl.Sdk.Rest.PaymentLinks.PaymentLinks;
@@ -24,15 +25,13 @@ public class NimbblApi : IDisposable
     {
         var url = string.IsNullOrWhiteSpace(baseUrl) ? ApiConstants.BaseUrl : baseUrl!;
         
-        // Initialize Logger with default log file path if not provided
+        // Initialize Logger with default log file path (logging is always enabled)
         var defaultLogPath = string.IsNullOrWhiteSpace(logFilePath)
             ? Path.Combine(Directory.GetCurrentDirectory(), "logs", "nimbbl_debug.log")
             : logFilePath;
         
-        if (!string.IsNullOrWhiteSpace(defaultLogPath))
-        {
-            Logger.GetInstance(defaultLogPath);
-        }
+        // Always initialize logger (INFO, WARNING, ERROR logs are always enabled)
+        Logger.GetInstance(defaultLogPath);
         
         _client = new NimbblClient(key, secret, url, encryptPayload);
     }
@@ -44,31 +43,27 @@ public class NimbblApi : IDisposable
     /// <param name="accessKey">Nimbbl access key (required)</param>
     /// <param name="accessSecret">Nimbbl access secret (required)</param>
     /// <param name="apiHost">API host URL (optional, defaults to production)</param>
-    /// <param name="enableLogging">Enable SDK logging (optional, defaults to false)</param>
     /// <param name="debugLogging">Enable debug logging (optional, defaults to false)</param>
-    /// <param name="logFilePath">Log file path (optional)</param>
+    /// <param name="logFilePath">Log file path (optional, defaults to logs/nimbbl_debug.log)</param>
     /// <param name="encryptPayload">Enable encryption for request payloads (optional, defaults to false)</param>
     public static NimbblApi Initialize(
         string accessKey,
         string accessSecret,
         string? apiHost = null,
-        bool? enableLogging = null,
         bool? debugLogging = null,
         string? logFilePath = null,
         bool encryptPayload = false)
     {
-        // Configure SDK logging
-        var enableLog = enableLogging ?? false;
+        // Configure debug logging (INFO, WARNING, ERROR logs are always enabled)
         var debugLog = debugLogging ?? false;
-        
-        if (enableLog)
-        {
-            Logger.EnableLogging();
-        }
         
         if (debugLog)
         {
             Logger.EnableDebug();
+        }
+        else
+        {
+            Logger.DisableDebug();
         }
         
         // Build base URL from apiHost or use default

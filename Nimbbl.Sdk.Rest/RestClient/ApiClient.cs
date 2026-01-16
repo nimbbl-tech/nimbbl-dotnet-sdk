@@ -25,7 +25,6 @@ internal class ApiClient : IDisposable
         private DateTime? _explicitTokenExpiryUtc;
 
     private JsonDocument? _tokenDoc;
-    private readonly AuthenticationService _authenticationService;
     private readonly Logger _logger;
     
     private JsonElement Token => _tokenDoc?.RootElement ?? default;
@@ -69,7 +68,6 @@ internal class ApiClient : IDisposable
         };
         // Default User-Agent: SDK name/version + runtime
         _defaultHeaders["User-Agent"] = $"{SdkConstants.SdkName}/{SdkConstants.SdkVersion} .NET/{Environment.Version}";
-        _authenticationService = new(_client, key, secret, _serializerOptions);
     }
 
     /// <summary>
@@ -205,18 +203,7 @@ internal class ApiClient : IDisposable
             ThrowIfErrorEnvelope(responseBody);
         }
         
-        // Log raw JSON for debugging (before deserialization attempt)
-        if (responseBody != null)
-        {
-            // Use Logger class for consistent format
-            _logger.DebugWithCaller($"Raw JSON Response (before deserialization):\n{responseBody}", callerInfo);
-        }
-        else
-        {
-            // Use Logger class for consistent format
-            _logger.DebugWithCaller("Response body is NULL", callerInfo);
-        }
-        
+        // Note: Raw JSON response logging is handled by LogResponseAsync() to avoid duplication
         // Check if response contains encrypted_response and decrypt it if needed
         if (httpResponse.IsSuccessStatusCode && !string.IsNullOrWhiteSpace(responseBody))
         {
@@ -361,14 +348,34 @@ internal class ApiClient : IDisposable
 
     /// <summary>
     /// Handles error responses by parsing error messages and throwing appropriate exceptions
+    /// Always logs error responses with masking (unmasked only when debug is enabled)
     /// </summary>
     private async Task HandleErrorResponseAsync(HttpResponseMessage httpResponse, (string Module, string Function, int Line)? callerInfo = null)
     {
         var errorText = await httpResponse.Content.ReadAsStringAsync();
         
-        // Log the error response (masked unless debug is enabled) - CentralMasker is ONLY used for logging
-        var logText = Logger.IsDebugEnabled() ? errorText : CentralMasker.MaskBody(errorText);
-        _logger.ErrorWithCaller($"HTTP {httpResponse.StatusCode}: {logText}", callerInfo);
+        // Build error log message
+        var statusCode = (int)httpResponse.StatusCode;
+        var statusText = httpResponse.StatusCode.ToString();
+        var uri = httpResponse.RequestMessage?.RequestUri?.ToString() ?? "unknown";
+        var errorLogMessage = $"HTTP {statusCode} {statusText} for {uri}";
+        
+        // Log error response headers (unmasked for exceptions/errors)
+        var headersToLog = CentralMasker.GetUnmaskedHeaders(httpResponse.Headers, httpResponse.Content?.Headers);
+        if (headersToLog.Any())
+        {
+            // Use compact JSON (no indentation) for better log readability
+            var headersJson = JsonSerializer.Serialize(headersToLog, new JsonSerializerOptions 
+            { 
+                WriteIndented = false 
+            });
+            errorLogMessage += $"\nResponse Headers: {headersJson}";
+        }
+        
+        // Log the error response body (unmasked for exceptions/errors)
+        errorLogMessage += $"\nResponse Body: {errorText}";
+        
+        _logger.ErrorWithCaller(errorLogMessage, callerInfo);
         
         // Check if error response is encrypted and decrypt if needed
         if (IsValidJson(errorText))
@@ -483,9 +490,9 @@ internal class ApiClient : IDisposable
         return statusCode switch
         {
             HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden => new AuthenticationException(safeMessage, code, errorCode ?? ErrorCodes.AuthError),
-            HttpStatusCode.BadRequest or (HttpStatusCode)422 => new BadRequestException(safeMessage, code, errorCode ?? ErrorCodes.ServerError),
+            HttpStatusCode.BadRequest or (HttpStatusCode)HttpStatusCodes.UnprocessableEntity => new BadRequestException(safeMessage, code, errorCode ?? ErrorCodes.ServerError),
             HttpStatusCode.NotFound => new NotFoundException(safeMessage, code, errorCode ?? ErrorCodes.ServerError),
-            (HttpStatusCode)429 => new RateLimitException(safeMessage, code, errorCode ?? ErrorCodes.ServerError),
+            (HttpStatusCode)HttpStatusCodes.TooManyRequests => new RateLimitException(safeMessage, code, errorCode ?? ErrorCodes.ServerError),
             HttpStatusCode.InternalServerError or HttpStatusCode.BadGateway or HttpStatusCode.ServiceUnavailable or HttpStatusCode.GatewayTimeout
                 => new ServerException(safeMessage, code, errorCode ?? ErrorCodes.ServerError),
             _ => new ApiException(safeMessage, code, errorCode ?? ErrorCodes.ServerError)
@@ -610,10 +617,9 @@ internal class ApiClient : IDisposable
         }
 
         // Token doesn't exist or is expired, generate a new one
-
         try
         {
-            var tokenResponse = await _authenticationService.Authenticate();
+            var tokenResponse = await GenerateTokenInternalAsync();
 
             if (tokenResponse.ValueKind != JsonValueKind.Object || 
                 !tokenResponse.TryGetProperty(JsonKeys.Token, out var tokenProp) || 
@@ -658,6 +664,32 @@ internal class ApiClient : IDisposable
     }
 
     /// <summary>
+    /// Internal method to generate authentication token using access_key and access_secret
+    /// This is used both by Auth.GenerateTokenAsync() and by automatic token generation
+    /// Uses ExecuteRequestAsync to ensure proper logging of request/response
+    /// </summary>
+    internal async Task<JsonElement> GenerateTokenInternalAsync()
+    {
+        var contentBody = new Dictionary<string, object?>
+        {
+            [JsonKeys.AccessKey] = _key,
+            [JsonKeys.AccessSecret] = _secret
+        };
+        
+        // Use ExecuteRequestAsync to ensure proper logging (request/response are logged with masking)
+        var response = await ExecuteRequestAsync<JsonElement>(CreateRequest(HttpMethod.Post, ApiConstants.AuthGenerateToken, contentBody));
+        
+        // Check if valid
+        if (response.TryGetProperty(JsonKeys.Valid, out var validProp) && !validProp.GetBoolean())
+        {
+            throw new ApplicationException(ErrorMessages.InvalidTokenResponse);
+        }
+        
+        // Return the response (already a JsonElement from ExecuteRequestAsync)
+        return response;
+    }
+
+    /// <summary>
     /// Lazily authorizes the request by setting bearer token (cached or explicitly set)
     /// Priority: 1. Explicit bearer token > 2. Auto-generated merchant token > 3. Cached token
     /// Note: generate-token endpoint doesn't require authentication (uses access_key/access_secret in body)
@@ -685,7 +717,7 @@ internal class ApiClient : IDisposable
         // Priority 2: Auto-generate merchant token if needed (for all non-auth requests)
         // Since nimbbl_api supports merchant tokens for all endpoints (higher_level_token_supported=True by default),
         // we can auto-generate merchant tokens for all APIs
-        System.Exception? tokenGenerationException = null;
+        System.Exception? tokenGenerationException;
         try
         {
             var merchantToken = await EnsureMerchantTokenAsync();
@@ -715,7 +747,7 @@ internal class ApiClient : IDisposable
         var errorMessage = ErrorMessages.NoValidTokenAvailable;
         if (tokenGenerationException != null)
         {
-            // If the exception already contains a clear error message (from AuthenticationService),
+            // If the exception already contains a clear error message (from token generation),
             // use it directly. Otherwise, provide generic guidance.
             if (tokenGenerationException.Message.Contains(ErrorMessages.AccessKeyKeyword) || 
                 tokenGenerationException.Message.Contains(ErrorMessages.AccessSecretKeyword) ||
@@ -853,11 +885,21 @@ internal class ApiClient : IDisposable
 
     /// <summary>
     /// Logs the HTTP request details and returns caller info for reuse in response logs
+    /// Only logs when debug mode is enabled
     /// </summary>
     private async Task<(string Module, string Function, int Line)> LogRequestAsync(HttpRequestMessage request)
     {
         try
         {
+            // Get caller info once to reuse for response logs
+            var callerInfo = Logger.GetCaller();
+            
+            // Only log when debug mode is enabled
+            if (!Logger.IsDebugEnabled())
+            {
+                return callerInfo;
+            }
+            
             // Get full URL (absolute URI)
             var uri = request.RequestUri?.IsAbsoluteUri == true 
                 ? request.RequestUri.ToString() 
@@ -866,21 +908,17 @@ internal class ApiClient : IDisposable
                     : request.RequestUri?.ToString() ?? "unknown");
             var method = request.Method.ToString();
             
-            // Get caller info once to reuse for response logs
-            var callerInfo = Logger.GetCaller();
-            
             // Build log message with full URL
             var logMessage = $"{method} {uri}";
             
-            // Log request headers (with masking for sensitive values unless debug is enabled)
-            var headersToLog = Logger.IsDebugEnabled() 
-                ? CentralMasker.GetUnmaskedHeaders(request.Headers, request.Content?.Headers)
-                : CentralMasker.MaskHeaders(request.Headers, request.Content?.Headers);
+            // Log request headers (masked for security)
+            var headersToLog = CentralMasker.MaskHeaders(request.Headers, request.Content?.Headers);
             if (headersToLog.Any())
             {
+                // Use compact JSON (no indentation) for better log readability
                 var headersJson = JsonSerializer.Serialize(headersToLog, new JsonSerializerOptions 
                 { 
-                    WriteIndented = true 
+                    WriteIndented = false 
                 });
                 logMessage += $"\nRequest Headers: {headersJson}";
             }
@@ -891,7 +929,7 @@ internal class ApiClient : IDisposable
             {
                 // Read body (for StringContent, this is safe to read multiple times)
                 requestBody = await request.Content.ReadAsStringAsync();
-                var bodyToLog = Logger.IsDebugEnabled() ? requestBody : CentralMasker.MaskBody(requestBody);
+                var bodyToLog = CentralMasker.MaskBody(requestBody);
                 logMessage += $"\nRequest Body: {bodyToLog}";
                 
                 // Recreate content from the string so it can be read again for the actual HTTP request
@@ -902,17 +940,14 @@ internal class ApiClient : IDisposable
             // Use Logger.InfoWithCaller for logging with caller info
             _logger.InfoWithCaller(logMessage, callerInfo);
             
-            // Log raw request body for debugging (unmasked, only when debug is enabled)
-            if (Logger.IsDebugEnabled())
+            // Log raw request body for debugging (unmasked)
+            if (requestBody != null)
             {
-                if (requestBody != null)
-                {
-                    _logger.DebugWithCaller($"Raw JSON Request (before sending):\n{requestBody}", callerInfo);
-                }
-                else
-                {
-                    _logger.DebugWithCaller("Request body is NULL", callerInfo);
-                }
+                _logger.DebugWithCaller($"Raw JSON Request (before sending):\n{requestBody}", callerInfo);
+            }
+            else
+            {
+                _logger.DebugWithCaller("Request body is NULL", callerInfo);
             }
             
             return callerInfo;
@@ -929,11 +964,18 @@ internal class ApiClient : IDisposable
 
     /// <summary>
     /// Logs the HTTP response details
+    /// Only logs when debug mode is enabled
     /// </summary>
     private static async Task LogResponseAsync(HttpResponseMessage response, string? responseBody = null, (string Module, string Function, int Line)? callerInfo = null)
     {
         try
         {
+            // Only log when debug mode is enabled
+            if (!Logger.IsDebugEnabled())
+            {
+                return;
+            }
+            
             var logger = Logger.GetInstance();
             var statusCode = (int)response.StatusCode;
             var statusText = response.StatusCode.ToString();
@@ -942,25 +984,50 @@ internal class ApiClient : IDisposable
             // Build log message
             var logMessage = $"{statusCode} {statusText} for {uri}";
             
-            // Log response body (use provided body or read it, masked unless debug is enabled)
+            // Log response headers (masked for security)
+            var headersToLog = CentralMasker.MaskHeaders(response.Headers, response.Content?.Headers);
+            if (headersToLog.Any())
+            {
+                // Use compact JSON (no indentation) for better log readability
+                var headersJson = JsonSerializer.Serialize(headersToLog, new JsonSerializerOptions 
+                { 
+                    WriteIndented = false 
+                });
+                logMessage += $"\nResponse Headers: {headersJson}";
+            }
+            
+            // Log response body (masked for security)
             if (responseBody != null)
             {
-                var bodyToLog = Logger.IsDebugEnabled() ? responseBody : CentralMasker.MaskBody(responseBody);
+                var bodyToLog = CentralMasker.MaskBody(responseBody);
                 logMessage += $"\nResponse Body: {bodyToLog}";
             }
             else if (response.Content != null)
             {
                 var body = await response.Content.ReadAsStringAsync();
-                var bodyToLog = Logger.IsDebugEnabled() ? body : CentralMasker.MaskBody(body);
+                var bodyToLog = CentralMasker.MaskBody(body);
                 logMessage += $"\nResponse Body: {bodyToLog}";
             }
             
             // Use Logger.Info with caller info from request log (or get fresh if not provided)
             logger.InfoWithCaller(logMessage, callerInfo);
+            
+            // Log raw response body for debugging (unmasked)
+            var rawBody = responseBody ?? (response.Content != null ? await response.Content.ReadAsStringAsync() : null);
+            if (rawBody != null)
+            {
+                logger.DebugWithCaller($"Raw JSON Response (before deserialization):\n{rawBody}", callerInfo);
+            }
+            else
+            {
+                logger.DebugWithCaller("Response body is NULL", callerInfo);
+            }
         }
-        catch
+        catch (System.Exception ex)
         {
-            // Silently fail logging to not break the API call
+            // Log the exception but don't throw to avoid breaking the API call
+            var logger = Logger.GetInstance();
+            logger.ExceptionWithCaller("LogResponseAsync failed", ex, callerInfo);
         }
     }
 

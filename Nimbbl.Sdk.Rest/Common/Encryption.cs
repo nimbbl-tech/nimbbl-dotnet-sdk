@@ -29,7 +29,7 @@ public class Encryption
     {
         if (string.IsNullOrWhiteSpace(accessSecret))
         {
-            throw new NimbblException(ErrorMessages.AccessSecretRequired, 400, ErrorCodes.InvalidAccessSecret);
+            throw new NimbblException(ErrorMessages.AccessSecretRequired, HttpStatusCodes.BadRequest, ErrorCodes.InvalidAccessSecret);
         }
 
         _keyIterations = keyIterations;
@@ -71,7 +71,7 @@ public class Encryption
             catch
             {
                 _logger.ErrorWithCaller("Encryption::decrypt() - Invalid hex string provided");
-                throw new NimbblException(ErrorMessages.InvalidHexString, 400, ErrorCodes.InvalidHexString);
+                throw new NimbblException(ErrorMessages.InvalidHexString, HttpStatusCodes.BadRequest, ErrorCodes.InvalidHexString);
             }
             
             _logger.DebugWithCaller($"Encryption::decrypt() - Hex conversion successful, bytes length: {encryptedBytes.Length}");
@@ -154,7 +154,7 @@ public class Encryption
         catch (System.Exception ex)
         {
             _logger.ExceptionWithCaller($"Decryption error: {ex.Message}", ex);
-            throw new NimbblException(string.Format(ErrorMessages.DecryptionError, ex.Message), 500, ErrorCodes.DecryptionError);
+            throw new NimbblException(string.Format(ErrorMessages.DecryptionError, ex.Message), HttpStatusCodes.Unknown, ErrorCodes.DecryptionError);
         }
     }
 
@@ -232,7 +232,7 @@ public class Encryption
         catch (System.Exception ex)
         {
             _logger.ExceptionWithCaller($"Encryption error: {ex.Message}", ex);
-            throw new NimbblException(string.Format(ErrorMessages.EncryptionError, ex.Message), 500, ErrorCodes.EncryptionError);
+            throw new NimbblException(string.Format(ErrorMessages.EncryptionError, ex.Message), HttpStatusCodes.Unknown, ErrorCodes.EncryptionError);
         }
     }
 }

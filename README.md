@@ -148,41 +148,13 @@ public class MyController : ControllerBase
 }
 ```
 
-### Option 3: Direct NimbblClient Usage
-
-```c#
-using Nimbbl.Sdk.Rest;
-
-var client = new NimbblClient(
-    key: "your_access_key",
-    secret: "your_access_secret",
-    baseUrl: "https://api.nimbbl.tech/api/"
-);
-
-var order = await client.Orders.CreateOrderAsync(new Dictionary<string, object?>
-{
-    ["invoice_id"] = "INV-12345",
-    ["total_amount"] = 400.0,  // Amount as double (not decimal)
-    ["currency"] = "INR"
-});
-```
-
-```c#
-var order = await client.Orders.CreateOrderAsync(new Dictionary<string, object?>
-{
-    ["invoice_id"] = "INV-12345",
-    ["total_amount"] = 400.0,  // Amount as double (not decimal)
-    ["currency"] = "INR"
-});
-```
-
 ## API Usage Examples
 
 ### Orders API (dictionary payloads)
 
 ```c#
 // Create order
-var order = await client.Orders.CreateOrderAsync(new Dictionary<string, object?>
+var order = await api.Orders().CreateOrderAsync(new Dictionary<string, object?>
 {
     ["invoice_id"] = "INV-12345",
     ["total_amount"] = 400.0,  // Amount as double (not decimal)
@@ -190,17 +162,17 @@ var order = await client.Orders.CreateOrderAsync(new Dictionary<string, object?>
 });
 
 // Get order by ID
-var order = await client.Orders.GetOrderByIdAsync("order_id");
+var order = await api.Orders().GetOrderByIdAsync("order_id");
 
 // Get order by invoice ID
-var order = await client.Orders.GetOrderByInvoiceIdAsync("invoice_id");
+var order = await api.Orders().GetOrderByInvoiceIdAsync("invoice_id");
 ```
 
 ### Payments API (dictionary payloads)
 
 ```c#
 // Initiate payment
-var payment = await client.Payments.InitiatePaymentAsync(new Dictionary<string, object?>
+var payment = await api.Payments().InitiatePaymentAsync(new Dictionary<string, object?>
 {
     ["order_id"] = "order_id",
     ["payment_mode"] = "netbanking",
@@ -208,14 +180,14 @@ var payment = await client.Payments.InitiatePaymentAsync(new Dictionary<string, 
 });
 
 // Complete payment
-var result = await client.Payments.CompletePaymentAsync(new Dictionary<string, object?>
+var result = await api.Payments().CompletePaymentAsync(new Dictionary<string, object?>
 {
     ["order_id"] = "order_id",
     ["otp"] = "123456"
 });
 
 // Resend OTP
-var otpResult = await client.Payments.ResendPaymentOtpAsync(new Dictionary<string, object?>
+var otpResult = await api.Payments().ResendPaymentOtpAsync(new Dictionary<string, object?>
 {
     ["order_id"] = "order_id"
 });
@@ -225,7 +197,7 @@ var otpResult = await client.Payments.ResendPaymentOtpAsync(new Dictionary<strin
 
 ```c#
 // Create payment link
-var paymentLink = await client.PaymentLinks.CreatePaymentLinkAsync(new Dictionary<string, object?>
+var paymentLink = await api.PaymentLinks().CreatePaymentLinkAsync(new Dictionary<string, object?>
 {
     ["invoice_id"] = "INV-123",
     ["total_amount"] = 1000.0,  // Amount as double (not decimal)
@@ -235,13 +207,13 @@ var paymentLink = await client.PaymentLinks.CreatePaymentLinkAsync(new Dictionar
 });
 
 // Update payment link
-var updated = await client.PaymentLinks.UpdatePaymentLinkAsync(new Dictionary<string, object?>
+var updated = await api.PaymentLinks().UpdatePaymentLinkAsync(new Dictionary<string, object?>
 {
     ["total_amount"] = 1500.0  // Amount as double (not decimal)
 });
 
 // Enquiry
-var enquiry = await client.PaymentLinks.EnquiryPaymentLinkAsync(new Dictionary<string, object?>
+var enquiry = await api.PaymentLinks().EnquiryPaymentLinkAsync(new Dictionary<string, object?>
 {
     ["payment_link_id"] = "link_id"
 });
@@ -251,7 +223,7 @@ var enquiry = await client.PaymentLinks.EnquiryPaymentLinkAsync(new Dictionary<s
 
 ```c#
 // List addresses
-var addresses = await client.Addresses.ListAddressesAsync(new Dictionary<string, object?>
+var addresses = await api.Addresses().ListAddressesAsync(new Dictionary<string, object?>
 {
     ["user_id"] = "user_id",
     ["amount"] = 1000.0,  // Amount as double (not decimal)
@@ -259,7 +231,7 @@ var addresses = await client.Addresses.ListAddressesAsync(new Dictionary<string,
 });
 
 // Create address
-var address = await client.Addresses.CreateAddressAsync(new Dictionary<string, object?>
+var address = await api.Addresses().CreateAddressAsync(new Dictionary<string, object?>
 {
     ["user_id"] = "user_id",
     ["address1"] = "123 Main St",
@@ -270,26 +242,26 @@ var address = await client.Addresses.CreateAddressAsync(new Dictionary<string, o
 });
 
 // Update address
-var updated = await client.Addresses.UpdateAddressAsync("address_id", new Dictionary<string, object?>
+var updated = await api.Addresses().UpdateAddressAsync("address_id", new Dictionary<string, object?>
 {
     ["city"] = "Delhi"
 });
 
 // Delete address
-var result = await client.Addresses.DeleteAddressAsync("address_id");
+var result = await api.Addresses().DeleteAddressAsync("address_id");
 ```
 
 ### Refunds API (dictionary payloads)
 
 ```c#
 // Initiate refund (full)
-var refund = await client.Refunds.InitiateRefundAsync(new Dictionary<string, object?>
+var refund = await api.Refunds().InitiateRefundAsync(new Dictionary<string, object?>
 {
     ["transaction_id"] = "transaction_id"
 });
 
 // Initiate partial refund
-var partialRefund = await client.Refunds.InitiateRefundAsync(new Dictionary<string, object?>
+var partialRefund = await api.Refunds().InitiateRefundAsync(new Dictionary<string, object?>
 {
     ["transaction_id"] = "transaction_id",
     ["refund_amount"] = 50.0,  // Amount as double (not decimal)
@@ -301,22 +273,22 @@ var partialRefund = await client.Refunds.InitiateRefundAsync(new Dictionary<stri
 
 ```c#
 // Enquiry by transaction ID
-var txn = await client.Transactions().TransactionEnquiryAsync(new Dictionary<string, object?> { ["transaction_id"] = "transaction_id" });
+var txn = await api.Transactions().TransactionEnquiryAsync(new Dictionary<string, object?> { ["transaction_id"] = "transaction_id" });
 // Enquiry by order ID
-var txnByOrder = await client.Transactions.GetByOrderIdAsync("order_id");
+var txnByOrder = await api.Transactions().GetByOrderIdAsync("order_id");
 ```
 
 ### Checkout Utilities API (dictionary payloads)
 
 ```c#
 // List payment modes
-var modes = await client.CheckoutUtilities.ListPaymentModesAsync(new Dictionary<string, object?>
+var modes = await api.CheckoutUtilities().ListPaymentModesAsync(new Dictionary<string, object?>
 {
     ["order_id"] = "order_id"
 });
 
 // List banks
-var banks = await client.CheckoutUtilities.ListBanksAsync(new Dictionary<string, object?>
+var banks = await api.CheckoutUtilities().ListBanksAsync(new Dictionary<string, object?>
 {
     ["order_id"] = "order_id",
     ["amount"] = 1000.0,  // Amount as double (not decimal)
@@ -324,13 +296,13 @@ var banks = await client.CheckoutUtilities.ListBanksAsync(new Dictionary<string,
 });
 
 // Validate UPI VPA
-var vpa = await client.CheckoutUtilities.ValidateUpiVpaAsync(new Dictionary<string, object?>
+var vpa = await api.CheckoutUtilities().ValidateUpiVpaAsync(new Dictionary<string, object?>
 {
     ["vpa"] = "user@paytm"
 });
 
 // Note: Pass the order token via SetBearerToken if not using automatic auth
-client.SetBearerToken("order_token_here", expiresAtUtc: DateTime.UtcNow.AddMinutes(20));
+api.SetBearerToken("order_token_here", expiresAtUtc: DateTime.UtcNow.AddMinutes(20));
 ```
 
 ### Webhook
@@ -362,7 +334,7 @@ Nimbbl.Sdk.Rest/
 
 ## Version
 
-Current Version: 1.3.5-rc5
+Current Version: 1.3.5-rc6
 
 ## License
 

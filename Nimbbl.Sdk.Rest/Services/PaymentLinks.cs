@@ -113,4 +113,3 @@ public class PaymentLinks : BaseService
         return ApiClient.Post<Dictionary<string, object?>, JsonElement>(endpoint, request);
     }
 }
-

@@ -9,7 +9,7 @@ namespace Examples;
 /// </summary>
 public static class AddressExamples
 {
-    private static async Task<JsonElement?> FindAddressByIdViaListAsync(
+    private static async Task<JsonElement?> FindAddressByIdAsync(
         NimbblApi api,
         string addressId,
         string userId)
@@ -281,7 +281,7 @@ public static class AddressExamples
             Dictionary<string, object?> currentAddress;
             try
             {
-                var found = await FindAddressByIdViaListAsync(api, addressId, userIdForLookup!);
+                var found = await FindAddressByIdAsync(api, addressId, userIdForLookup!);
                 if (found == null)
                     throw new Exception($"Address not found under user_id={userIdForLookup}.");
 

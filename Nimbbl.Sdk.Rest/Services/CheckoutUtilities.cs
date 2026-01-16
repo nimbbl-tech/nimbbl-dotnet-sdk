@@ -53,7 +53,7 @@ public class CheckoutUtilities : BaseService
             catch (System.Exception ex)
             {
                 Logger.ExceptionWithCaller(string.Format(ErrorMessages.EncryptionErrorFormat, "list banks", ex.Message), ex);
-                throw new NimbblException(string.Format(ErrorMessages.EncryptionErrorFormat, "list banks", ex.Message), 500, ErrorCodes.EncryptionError);
+                throw new NimbblException(string.Format(ErrorMessages.EncryptionErrorFormat, "list banks", ex.Message), HttpStatusCodes.Unknown, ErrorCodes.EncryptionError);
             }
         }
         else
@@ -94,7 +94,7 @@ public class CheckoutUtilities : BaseService
             catch (System.Exception ex)
             {
                 Logger.ExceptionWithCaller(string.Format(ErrorMessages.EncryptionErrorFormat, "list wallets", ex.Message), ex);
-                throw new NimbblException(string.Format(ErrorMessages.EncryptionErrorFormat, "list wallets", ex.Message), 500, ErrorCodes.EncryptionError);
+                throw new NimbblException(string.Format(ErrorMessages.EncryptionErrorFormat, "list wallets", ex.Message), HttpStatusCodes.Unknown, ErrorCodes.EncryptionError);
             }
         }
         else
@@ -177,4 +177,3 @@ public class CheckoutUtilities : BaseService
         return ApiClient.Post<Dictionary<string, object?>, JsonElement>(ApiConstants.CheckoutGetUpiAppDetails, request);
     }
 }
-
