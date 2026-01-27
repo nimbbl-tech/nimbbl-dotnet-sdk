@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Nimbbl.Sdk.Rest.Common;
 using Nimbbl.Sdk.Rest.Log;
 using Nimbbl.Sdk.Rest.RestClient;
@@ -10,7 +11,7 @@ using NimbblAddresses = Nimbbl.Sdk.Rest.Addresses.Addresses;
 using NimbblPayments = Nimbbl.Sdk.Rest.Payments.Payments;
 using NimbblCheckoutUtilities = Nimbbl.Sdk.Rest.CheckoutUtilities.CheckoutUtilities;
 
-namespace Nimbbl.Sdk.Rest.Api;
+namespace Nimbbl.Sdk.Rest;
 
 /// <summary>
 /// Main entry point for the Nimbbl .NET SDK.
@@ -19,11 +20,33 @@ namespace Nimbbl.Sdk.Rest.Api;
 /// </summary>
 public class NimbblApi : IDisposable
 {
-    private readonly NimbblClient _client;
+    private readonly NimbblApiClient _client;
 
     public NimbblApi(string key, string secret, string? baseUrl = null, string? logFilePath = null, bool encryptPayload = false)
     {
-        var url = string.IsNullOrWhiteSpace(baseUrl) ? ApiConstants.BaseUrl : baseUrl!;
+        string url;
+        if (string.IsNullOrWhiteSpace(baseUrl))
+        {
+            url = ApiConstants.BaseUrl;
+        }
+        else
+        {
+            var trimmedUrl = baseUrl.TrimEnd('/');
+            var apiPathTrimmed = ApiConstants.ApiPath.TrimEnd('/');
+            
+            // If baseUrl doesn't end with /api, append /api/ automatically
+            // This allows users to pass just the host (e.g., https://qa3api.nimbbl.tech)
+            // and the SDK will automatically append /api/
+            if (!trimmedUrl.EndsWith(apiPathTrimmed, StringComparison.OrdinalIgnoreCase))
+            {
+                url = $"{trimmedUrl}{ApiConstants.ApiPath}";
+            }
+            else
+            {
+                // Already has /api, ensure it ends with /api/
+                url = baseUrl.EndsWith(ApiConstants.ApiPath) ? baseUrl : $"{trimmedUrl}{ApiConstants.ApiPath}";
+            }
+        }
         
         // Initialize Logger with default log file path (logging is always enabled)
         var defaultLogPath = string.IsNullOrWhiteSpace(logFilePath)
@@ -33,7 +56,7 @@ public class NimbblApi : IDisposable
         // Always initialize logger (INFO, WARNING, ERROR logs are always enabled)
         Logger.GetInstance(defaultLogPath);
         
-        _client = new NimbblClient(key, secret, url, encryptPayload);
+        _client = new NimbblApiClient(key, secret, url, encryptPayload);
     }
 
     /// <summary>
@@ -86,6 +109,7 @@ public class NimbblApi : IDisposable
 
     public void AddHeader(string key, string value) => _client.AddHeader(key, value);
     public void SetBearerToken(string token, DateTime? expiresAtUtc = null) => _client.SetBearerToken(token, expiresAtUtc);
+
 
     private bool _disposed = false;
 

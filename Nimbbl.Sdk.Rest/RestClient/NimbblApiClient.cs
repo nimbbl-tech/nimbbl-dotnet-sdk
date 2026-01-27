@@ -11,10 +11,10 @@ namespace Nimbbl.Sdk.Rest.RestClient;
 
 /// <summary>
 /// Internal client for accessing Nimbbl API services.
-/// This class is used internally by NimbblApi and should not be used directly.
-/// Use NimbblApi.Initialize() instead.
+/// This class is used internally by NimbblClient and should not be used directly.
+/// Use NimbblClient.Initialize() instead.
 /// </summary>
-internal class NimbblClient : IDisposable
+internal class NimbblApiClient : IDisposable
 {
     public NimbblOrders Orders { get; }
     public NimbblTransactions Transactions { get; }
@@ -26,7 +26,7 @@ internal class NimbblClient : IDisposable
     public NimbblAuth Auth { get; }
     private readonly ApiClient _apiClient;
 
-    public NimbblClient(string key, string secret, string baseUrl, bool encryptPayload = false)
+    public NimbblApiClient(string key, string secret, string baseUrl, bool encryptPayload = false)
     {
         _apiClient = new ApiClient(key, secret, baseUrl, encryptPayload);
         Orders = new NimbblOrders(_apiClient);
@@ -48,6 +48,8 @@ internal class NimbblClient : IDisposable
     {
         _apiClient.SetBearerToken(token, expiresAtUtc);
     }
+
+    public string GetSecret() => _apiClient.GetConfigSecret();
 
     private bool _disposed = false;
 

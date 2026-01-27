@@ -1,4 +1,4 @@
-using Nimbbl.Sdk.Rest.Api;
+using Nimbbl.Sdk.Rest;
 using Examples;
 
 Helpers.PrintHeader("=== Nimbbl .NET SDK - Interactive CLI Menu ===");

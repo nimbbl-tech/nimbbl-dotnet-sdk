@@ -83,15 +83,15 @@ NIMBBL_ACCESS_SECRET=your_access_secret_here
 NIMBBL_API_HOST=https://api.nimbbl.tech
 
 # Optional: Logging Configuration
-NIMBBL_ENABLE_LOGGING=false
-NIMBBL_LOG_FILE=logs/nimbbl_debug.log
+# INFO/WARNING/ERROR logs are always enabled. Set DEBUG to true to enable unmasked debug logs.
 NIMBBL_DEBUG_LOGGING=false
+NIMBBL_LOG_FILE=logs/nimbbl_debug.log
 ```
 
 **Note:** 
 - For UAT/Sandbox, use `NIMBBL_API_HOST=https://apipp.nimbbl.tech`
 - Webhook verification uses `NIMBBL_ACCESS_SECRET` automatically
-- Set `NIMBBL_ENABLE_LOGGING=true` to see detailed request/response logs
+ - Set `NIMBBL_DEBUG_LOGGING=true` to enable debug logging (unmasked raw JSON). INFO/WARNING/ERROR logs are always emitted.
 - The SDK does NOT load `.env` files - sample apps must read environment variables and pass them as parameters to `NimbblApi.Initialize()`
 
 ## Complete Example Coverage

@@ -1,6 +1,6 @@
 using System.Text.Json;
 using System;
-using Nimbbl.Sdk.Rest.Api;
+using Nimbbl.Sdk.Rest;
 using Nimbbl.Sdk.Rest.Exception;
 
 namespace Examples;

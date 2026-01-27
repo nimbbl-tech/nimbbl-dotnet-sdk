@@ -546,7 +546,7 @@ dotnet pack --configuration Release
 **Option 1: Using NimbblApi.Initialize() (Recommended)**
 
 ```csharp
-using Nimbbl.Sdk.Rest.Api;
+using Nimbbl.Sdk.Rest;
 using Nimbbl.Sdk.Rest.Common;
 
 // Load .env file (if using .env)
@@ -557,7 +557,6 @@ var api = NimbblApi.Initialize(
     accessKey: Environment.GetEnvironmentVariable("NIMBBL_ACCESS_KEY")!,
     accessSecret: Environment.GetEnvironmentVariable("NIMBBL_ACCESS_SECRET")!,
     apiHost: Environment.GetEnvironmentVariable("NIMBBL_API_HOST"),
-    enableLogging: true,
     debugLogging: false,
     logFilePath: "logs/nimbbl_debug.log"
 );
@@ -589,7 +588,6 @@ builder.Services.AddNimbbl(
     accessKey: Environment.GetEnvironmentVariable("NIMBBL_ACCESS_KEY")!,
     accessSecret: Environment.GetEnvironmentVariable("NIMBBL_ACCESS_SECRET")!,
     apiHost: Environment.GetEnvironmentVariable("NIMBBL_API_HOST"),
-    enableLogging: true,
     debugLogging: false,
     logFilePath: "logs/nimbbl_debug.log"
 );
@@ -624,7 +622,8 @@ Create a `.env` file in your project root:
 NIMBBL_ACCESS_KEY=your_access_key
 NIMBBL_ACCESS_SECRET=your_access_secret
 NIMBBL_API_HOST=https://api.nimbbl.tech
-NIMBBL_ENABLE_LOGGING=true
+## Logging configuration
+# NOTE: INFO/WARNING/ERROR logs are always enabled. Use NIMBBL_DEBUG_LOGGING to enable unmasked DEBUG logs.
 NIMBBL_DEBUG_LOGGING=false
 NIMBBL_LOG_FILE=logs/nimbbl_debug.log
 ```
@@ -772,8 +771,7 @@ The SDK uses environment variables for configuration. You can provide them via:
 ### Optional Environment Variables
 
 - `NIMBBL_API_HOST` - API host URL (defaults to production: `https://api.nimbbl.tech`)
-- `NIMBBL_ENABLE_LOGGING` - Enable/disable logging (defaults to `true`)
-- `NIMBBL_DEBUG_LOGGING` - Enable/disable debug logging (defaults to `false`)
+- `NIMBBL_DEBUG_LOGGING` - Enable debug logging (defaults to `false`). INFO/WARNING/ERROR logs are always emitted; enabling debug logging will include unmasked raw JSON for troubleshooting.
 - `NIMBBL_LOG_FILE` - Log file path (defaults to `logs/nimbbl_debug.log`)
 - `NIMBBL_CHECKOUT_HOST` - Override checkout host (optional)
 

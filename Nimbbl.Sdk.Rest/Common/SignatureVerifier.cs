@@ -8,7 +8,7 @@ namespace Nimbbl.Sdk.Rest.Common;
 /// <summary>
 /// Utility helpers for signature and webhook verification.
 /// </summary>
-public class SignatureVerifier
+public static class SignatureVerifier
 {
     /// <summary>
     /// Verify signature for payment status callbacks and webhooks.
@@ -16,46 +16,39 @@ public class SignatureVerifier
     /// </summary>
     /// <param name="attributes">Response attributes containing transaction and order data</param>
     /// <param name="secretKey">Secret key for signature verification</param>
-    /// <returns>Signature verification result</returns>
-    public static SignatureVerificationResult VerifyPaymentSignature(JsonElement attributes, string? secretKey = null)
+    /// <returns>True if signature is valid, false otherwise</returns>
+    public static bool VerifyPaymentSignature(JsonElement attributes, string? secretKey = null)
     {
-        var secret = string.IsNullOrWhiteSpace(secretKey) ? throw new ArgumentException(ErrorMessages.SecretKeyRequired, nameof(secretKey)) : secretKey!;
-        var logger = Log.Logger.GetInstance();
+        var (secret, logger) = InitializeVerifier(secretKey);
+        
+        // Log incoming JsonElement for debugging
+        logger.InfoWithCaller($"VerifyPaymentSignature - Incoming JSON: {attributes.GetRawText()}");
 
+        // Transaction object is required for payment signature verification
         if (!attributes.TryGetProperty(JsonKeys.Transaction, out var txn) || txn.ValueKind != JsonValueKind.Object)
         {
             logger.ErrorWithCaller($"{ErrorMessages.MessageSignatureVerificationMissingParams}: {JsonKeys.Transaction}");
-            return SignatureVerificationResult.FromMissingParams([JsonKeys.Transaction]);
+            return false;
         }
 
         var order = attributes.TryGetProperty(JsonKeys.Order, out var orderProp) && orderProp.ValueKind == JsonValueKind.Object
             ? orderProp
             : default;
 
-        var signatureVersion = TryGetString(txn, JsonKeys.SignatureVersion) ?? TryGetString(txn, "signatureVersion") ?? SdkConstants.SignatureVersionV3;
+        // Read signatureVersion only from inside transaction object
+        var signatureVersion = JsonUtils.TryGetString(txn, JsonKeys.SignatureVersion);
 
-        // Only support v3 signature format
-        if (signatureVersion != SdkConstants.SignatureVersionV3)
-        {
-            var failMsg = $"Unsupported signature version: {signatureVersion}. Only {SdkConstants.SignatureVersionV3} is supported.";
-            logger.ErrorWithCaller($"{ErrorMessages.MessageSignatureVerificationFailed} - {failMsg}");
-            return SignatureVerificationResult.FromFailed(failMsg);
-        }
+        // Read signature only from inside transaction object (no fallback to attributes or order)
+        var signature = JsonUtils.TryGetString(txn, JsonKeys.Signature);
 
-        // signature fallback chain: nimbbl_signature, transaction.nimbbl_signature, transaction.signature, order.nimbbl_signature
-        var signature = TryGetString(attributes, JsonKeys.NimbblSignature)
-            ?? TryGetString(txn, JsonKeys.NimbblSignature)
-            ?? TryGetString(txn, JsonKeys.Signature)
-            ?? TryGetString(order, JsonKeys.NimbblSignature);
+        // Read transaction_id only from inside the transaction object (no fallback)
+        var transactionId = JsonUtils.TryGetString(txn, JsonKeys.TransactionId);
 
-        var transactionId = TryGetString(attributes, JsonKeys.NimbblTransactionId)
-            ?? TryGetString(txn, JsonKeys.TransactionId);
-        
-        var invoiceId = TryGetString(order, JsonKeys.InvoiceId) ?? TryGetString(attributes, JsonKeys.InvoiceId);
-        var transactionType = TryGetString(txn, JsonKeys.TransactionType) ?? TryGetString(txn, JsonKeys.Type);
-        var transactionAmount = TryGetDouble(txn, JsonKeys.TransactionAmount) ?? TryGetDouble(txn, JsonKeys.Amount);
-        var transactionCurrency = TryGetString(txn, JsonKeys.TransactionCurrency) ?? TryGetString(txn, JsonKeys.Currency);
-        var status = TryGetString(txn, JsonKeys.Status);
+        var invoiceId = JsonUtils.TryGetString(order, JsonKeys.InvoiceId);
+        var transactionType = JsonUtils.TryGetString(txn, JsonKeys.TransactionType);
+        var transactionAmount = JsonUtils.TryGetDouble(txn, JsonKeys.TransactionAmount);
+        var transactionCurrency = JsonUtils.TryGetString(txn, JsonKeys.TransactionCurrency);
+        var status = JsonUtils.TryGetString(txn, JsonKeys.Status);
 
         var missing = new List<string>();
         if (string.IsNullOrEmpty(invoiceId)) missing.Add(JsonKeys.InvoiceId);
@@ -66,27 +59,12 @@ public class SignatureVerifier
         if (string.IsNullOrEmpty(transactionType)) missing.Add(JsonKeys.TransactionType);
         if (string.IsNullOrEmpty(signature)) missing.Add(JsonKeys.Signature);
 
-        if (missing.Count > 0)
-        {
-            logger.ErrorWithCaller($"{ErrorMessages.MessageSignatureVerificationMissingParams}: {string.Join(", ", missing)}");
-            return SignatureVerificationResult.FromMissingParams(missing);
-        }
-
-        var amountStr = FormatAmount(transactionAmount!.Value);
+        var amountStr = transactionAmount != null ? FormatAmount(transactionAmount.Value) : string.Empty;
         var payload = $"{invoiceId}|{transactionId}|{amountStr}|{transactionCurrency}|{status}|{transactionType}";
-        var expected = GenerateHmacSignature(payload, secret);
+        var failDetails = $"Signature Version: {signatureVersion}, Invoice ID: {invoiceId}, Transaction ID: {transactionId}, Amount: {amountStr}, Currency: {transactionCurrency}, Status: {status}, Type: {transactionType}";
+        var okDetails = $"Signature Version: {signatureVersion}, Invoice ID: {invoiceId}, Transaction ID: {transactionId}, Amount: {amountStr}";
 
-        if (!SecureStringEquals(expected, signature!))
-        {
-            var failMsg = $"Signature Version: {signatureVersion}, Invoice ID: {invoiceId}, Transaction ID: {transactionId}, Amount: {amountStr}, Currency: {transactionCurrency}, Status: {status}, Type: {transactionType}";
-            logger.ErrorWithCaller($"{ErrorMessages.MessageSignatureVerificationFailed} - {failMsg}");
-            return SignatureVerificationResult.FromFailed(failMsg);
-        }
-
-        var okMsg = $"Signature Version: {signatureVersion}, Invoice ID: {invoiceId}, Transaction ID: {transactionId}, Amount: {amountStr}";
-        var successMsg = ErrorMessages.MessageSignatureVerificationSuccess ?? "Signature verification succeeded";
-        logger.InfoWithCaller($"{successMsg} - {okMsg}");
-        return SignatureVerificationResult.FromSuccess(okMsg);
+        return VerifyPayloadAndSignature(signatureVersion, signature, payload, missing, failDetails, okDetails, secret, logger);
     }
 
     /// <summary>
@@ -95,51 +73,43 @@ public class SignatureVerifier
     /// </summary>
     /// <param name="attributes">Response attributes containing transaction and order data</param>
     /// <param name="secretKey">Secret key for signature verification</param>
-    /// <returns>Signature verification result</returns>
-    public static SignatureVerificationResult VerifyRefundSignature(JsonElement attributes, string? secretKey = null)
+    /// <returns>True if signature is valid, false otherwise</returns>
+    public static bool VerifyRefundSignature(JsonElement attributes, string? secretKey = null)
     {
-        var secret = string.IsNullOrWhiteSpace(secretKey) ? throw new ArgumentException(ErrorMessages.SecretKeyRequired, nameof(secretKey)) : secretKey!;
-        var logger = Log.Logger.GetInstance();
+        var (secret, logger) = InitializeVerifier(secretKey);
 
         if (!attributes.TryGetProperty(JsonKeys.Transaction, out var txn) || txn.ValueKind != JsonValueKind.Object)
         {
             logger.ErrorWithCaller($"{ErrorMessages.MessageSignatureVerificationMissingParams}: {JsonKeys.Transaction}");
-            return SignatureVerificationResult.FromMissingParams([JsonKeys.Transaction]);
+            return false;
         }
 
         var order = attributes.TryGetProperty(JsonKeys.Order, out var orderProp) && orderProp.ValueKind == JsonValueKind.Object
             ? orderProp
             : default;
 
-        var signatureVersion = TryGetString(txn, JsonKeys.SignatureVersion) ?? TryGetString(txn, "signatureVersion") ?? SdkConstants.SignatureVersionV3;
-
-        // Only support v3 signature format
-        if (signatureVersion != SdkConstants.SignatureVersionV3)
-        {
-            var failMsg = $"Unsupported signature version: {signatureVersion}. Only {SdkConstants.SignatureVersionV3} is supported.";
-            logger.ErrorWithCaller($"{ErrorMessages.MessageSignatureVerificationFailed} - {failMsg}");
-            return SignatureVerificationResult.FromFailed(failMsg);
-        }
+        var signatureVersion = JsonUtils.TryGetString(txn, JsonKeys.SignatureVersion);
 
         // signature fallback chain: nimbbl_signature, transaction.nimbbl_signature, transaction.signature, order.nimbbl_signature
-        var signature = TryGetString(attributes, JsonKeys.NimbblSignature)
-            ?? TryGetString(txn, JsonKeys.NimbblSignature)
-            ?? TryGetString(txn, JsonKeys.Signature)
-            ?? TryGetString(order, JsonKeys.NimbblSignature);
+        var signature = JsonUtils.TryGetString(attributes, JsonKeys.NimbblSignature)
+            ?? JsonUtils.TryGetString(txn, JsonKeys.NimbblSignature)
+            ?? JsonUtils.TryGetString(txn, JsonKeys.Signature)
+            ?? JsonUtils.TryGetString(order, JsonKeys.NimbblSignature);
 
-        var transactionId = TryGetString(attributes, JsonKeys.NimbblTransactionId)
-            ?? TryGetString(txn, JsonKeys.TransactionId);
-        
-        var invoiceId = TryGetString(order, JsonKeys.InvoiceId) ?? TryGetString(attributes, JsonKeys.InvoiceId);
-        var transactionType = TryGetString(txn, JsonKeys.TransactionType) ?? TryGetString(txn, JsonKeys.Type);
-        var refundAmount = TryGetDouble(txn, JsonKeys.RefundAmount)
-            ?? TryGetDouble(txn, "payment_transaction_amount")
-            ?? TryGetDouble(txn, JsonKeys.TransactionAmount)
-            ?? TryGetDouble(txn, JsonKeys.Amount);
-        var transactionCurrency = TryGetString(txn, JsonKeys.TransactionCurrency)
-            ?? TryGetString(txn, JsonKeys.Currency)
-            ?? TryGetString(order, JsonKeys.Currency);
-        var status = TryGetString(txn, JsonKeys.RefundStatus) ?? TryGetString(txn, JsonKeys.Status);
+        // Prioritize transaction_id from inside the transaction object (more authoritative)
+        var transactionId = JsonUtils.TryGetString(txn, JsonKeys.TransactionId)
+            ?? JsonUtils.TryGetString(attributes, JsonKeys.NimbblTransactionId);
+
+        var invoiceId = JsonUtils.TryGetString(order, JsonKeys.InvoiceId) ?? JsonUtils.TryGetString(attributes, JsonKeys.InvoiceId);
+        var transactionType = JsonUtils.TryGetString(txn, JsonKeys.TransactionType) ?? JsonUtils.TryGetString(txn, JsonKeys.Type);
+        var refundAmount = JsonUtils.TryGetDouble(txn, JsonKeys.RefundAmount)
+            ?? JsonUtils.TryGetDouble(txn, JsonKeys.PaymentTransactionAmount)
+            ?? JsonUtils.TryGetDouble(txn, JsonKeys.TransactionAmount)
+            ?? JsonUtils.TryGetDouble(txn, JsonKeys.Amount);
+        var transactionCurrency = JsonUtils.TryGetString(txn, JsonKeys.TransactionCurrency)
+            ?? JsonUtils.TryGetString(txn, JsonKeys.Currency)
+            ?? JsonUtils.TryGetString(order, JsonKeys.Currency);
+        var status = JsonUtils.TryGetString(txn, JsonKeys.RefundStatus) ?? JsonUtils.TryGetString(txn, JsonKeys.Status);
 
         var missing = new List<string>();
         if (string.IsNullOrEmpty(invoiceId)) missing.Add(JsonKeys.InvoiceId);
@@ -150,27 +120,12 @@ public class SignatureVerifier
         if (string.IsNullOrEmpty(transactionType)) missing.Add(JsonKeys.TransactionType);
         if (string.IsNullOrEmpty(signature)) missing.Add(JsonKeys.Signature);
 
-        if (missing.Count > 0)
-        {
-            logger.ErrorWithCaller($"{ErrorMessages.MessageSignatureVerificationMissingParams}: {string.Join(", ", missing)}");
-            return SignatureVerificationResult.FromMissingParams(missing);
-        }
-
-        var amountStr = FormatAmount(refundAmount!.Value);
+        var amountStr = refundAmount != null ? FormatAmount(refundAmount.Value) : string.Empty;
         var payload = $"{invoiceId}|{transactionId}|{amountStr}|{transactionCurrency}|{status}|{transactionType}";
-        var expected = GenerateHmacSignature(payload, secret);
+        var failDetails = $"Signature Version: {signatureVersion}, Invoice ID: {invoiceId}, Transaction ID: {transactionId}, Refund Amount: {amountStr}, Currency: {transactionCurrency}, Status: {status}, Type: {transactionType}";
+        var okDetails = $"Signature Version: {signatureVersion}, Invoice ID: {invoiceId}, Transaction ID: {transactionId}, Refund Amount: {amountStr}";
 
-        if (!SecureStringEquals(expected, signature!))
-        {
-            var failMsg = $"Signature Version: {signatureVersion}, Invoice ID: {invoiceId}, Transaction ID: {transactionId}, Refund Amount: {amountStr}, Currency: {transactionCurrency}, Status: {status}, Type: {transactionType}";
-            logger.ErrorWithCaller($"{ErrorMessages.MessageSignatureVerificationFailed} - {failMsg}");
-            return SignatureVerificationResult.FromFailed(failMsg);
-        }
-
-        var okMsg = $"Signature Version: {signatureVersion}, Invoice ID: {invoiceId}, Transaction ID: {transactionId}, Refund Amount: {amountStr}";
-        var successMsg = ErrorMessages.MessageSignatureVerificationSuccess ?? "Signature verification succeeded";
-        logger.InfoWithCaller($"{successMsg} - {okMsg}");
-        return SignatureVerificationResult.FromSuccess(okMsg);
+        return VerifyPayloadAndSignature(signatureVersion, signature, payload, missing, failDetails, okDetails, secret, logger);
     }
 
     /// <summary>
@@ -179,31 +134,22 @@ public class SignatureVerifier
     /// </summary>
     /// <param name="attributes">Response attributes containing payment link data</param>
     /// <param name="secretKey">Secret key for signature verification</param>
-    /// <returns>Signature verification result</returns>
-    public static SignatureVerificationResult VerifyPaymentLinkSignature(JsonElement attributes, string? secretKey = null)
+    /// <returns>True if signature is valid, false otherwise</returns>
+    public static bool VerifyPaymentLinkSignature(JsonElement attributes, string? secretKey = null)
     {
-        var secret = string.IsNullOrWhiteSpace(secretKey) ? throw new ArgumentException(ErrorMessages.SecretKeyRequired, nameof(secretKey)) : secretKey!;
-        var logger = Log.Logger.GetInstance();
+        var (secret, logger) = InitializeVerifier(secretKey);
 
-        var signatureVersion = TryGetString(attributes, JsonKeys.SignatureVersion) ?? SdkConstants.SignatureVersionV3;
-
-        // Only support v3 signature format
-        if (signatureVersion != SdkConstants.SignatureVersionV3)
-        {
-            var failMsg = $"Unsupported signature version: {signatureVersion}. Only {SdkConstants.SignatureVersionV3} is supported.";
-            logger.ErrorWithCaller($"{ErrorMessages.MessageSignatureVerificationFailed} - {failMsg}");
-            return SignatureVerificationResult.FromFailed(failMsg);
-        }
+        var signatureVersion = JsonUtils.TryGetString(attributes, JsonKeys.SignatureVersion) ?? SdkConstants.SignatureVersionV3;
 
         // signature fallback chain: nimbbl_signature, signature
-        var signature = TryGetString(attributes, JsonKeys.NimbblSignature)
-            ?? TryGetString(attributes, JsonKeys.Signature);
-        
-        var invoiceId = TryGetString(attributes, JsonKeys.InvoiceId);
-        var status = TryGetString(attributes, JsonKeys.Status);
-        var currency = TryGetString(attributes, JsonKeys.Currency);
-        var amountPaid = TryGetDouble(attributes, JsonKeys.AmountPaid) ?? TryGetDouble(attributes, JsonKeys.PaymentLinkAmountPaid) ?? 0.0;
-        var paymentLinkHash = TryGetString(attributes, JsonKeys.PaymentLinkHash);
+        var signature = JsonUtils.TryGetString(attributes, JsonKeys.NimbblSignature)
+            ?? JsonUtils.TryGetString(attributes, JsonKeys.Signature);
+
+        var invoiceId = JsonUtils.TryGetString(attributes, JsonKeys.InvoiceId);
+        var status = JsonUtils.TryGetString(attributes, JsonKeys.Status);
+        var currency = JsonUtils.TryGetString(attributes, JsonKeys.Currency);
+        var amountPaid = JsonUtils.TryGetDouble(attributes, JsonKeys.AmountPaid) ?? JsonUtils.TryGetDouble(attributes, JsonKeys.PaymentLinkAmountPaid) ?? 0.0;
+        var paymentLinkHash = JsonUtils.TryGetString(attributes, JsonKeys.PaymentLinkHash);
 
         var missing = new List<string>();
         if (string.IsNullOrEmpty(invoiceId)) missing.Add(JsonKeys.InvoiceId);
@@ -212,107 +158,132 @@ public class SignatureVerifier
         if (string.IsNullOrEmpty(paymentLinkHash)) missing.Add(JsonKeys.PaymentLinkHash);
         if (string.IsNullOrEmpty(signature)) missing.Add(JsonKeys.Signature);
 
-        if (missing.Count > 0)
-        {
-            logger.ErrorWithCaller($"{ErrorMessages.MessageSignatureVerificationMissingParams}: {string.Join(", ", missing)}");
-            return SignatureVerificationResult.FromMissingParams(missing);
-        }
-
         var amountStr = FormatAmount(amountPaid);
         var payload = $"{invoiceId}|{status}|{currency}|{amountStr}|{paymentLinkHash}";
-        var expected = GenerateHmacSignature(payload, secret);
+        var failDetails = $"Signature Version: {signatureVersion}, Invoice ID: {invoiceId}, Status: {status}, Currency: {currency}, Amount Paid: {amountStr}, Payment Link Hash: {paymentLinkHash}";
+        var okDetails = $"Signature Version: {signatureVersion}, Invoice ID: {invoiceId}, Amount Paid: {amountStr}";
 
-        if (!SecureStringEquals(expected, signature!))
+        return VerifyPayloadAndSignature(signatureVersion, signature, payload, missing, failDetails, okDetails, secret, logger);
+    }
+
+
+
+    /// <summary>
+    /// Verify signature for payment callbacks from the popup/redirect checkout.
+    /// Handles nested "payload" structures and automatically detects/decrypts encrypted responses.
+    /// </summary>
+    /// <param name="payload">The raw JSON payload string to verify</param>
+    /// <param name="secret">The merchant's access secret key</param>
+    /// <returns>True if signature is valid, false otherwise</returns>
+    public static bool VerifyCallbackSignature(JsonElement payload, string secret)
+    {
+        return VerifyPaymentSignature(payload, secret);
+    }
+
+    public static bool VerifySignature(string payload, string secret)
+    {
+        try
         {
-            var failMsg = $"Signature Version: {signatureVersion}, Invoice ID: {invoiceId}, Status: {status}, Currency: {currency}, Amount Paid: {amountStr}, Payment Link Hash: {paymentLinkHash}";
-            logger.ErrorWithCaller($"{ErrorMessages.MessageSignatureVerificationFailed} - {failMsg}");
-            return SignatureVerificationResult.FromFailed(failMsg);
+            var parsed = PayloadHelperUtils.Parse(payload, secret);
+            return VerifySignature(parsed, secret);
         }
-
-        var okMsg = $"Signature Version: {signatureVersion}, Invoice ID: {invoiceId}, Amount Paid: {amountStr}";
-        var successMsg = ErrorMessages.MessageSignatureVerificationSuccess ?? "Signature verification succeeded";
-        logger.InfoWithCaller($"{successMsg} - {okMsg}");
-        return SignatureVerificationResult.FromSuccess(okMsg);
+        catch
+        {
+             return false;
+        }
     }
 
     /// <summary>
-    /// Verify signature for payment/refund callbacks and webhooks.
-    /// Routes to the appropriate verification method based on webhook event type.
+    /// Verify signature for a parsed set of attributes.
+    /// Routes to the appropriate verification method based on event type.
     /// </summary>
-    /// <param name="attributes">Response attributes containing transaction and order data</param>
-    /// <param name="secretKey">Secret key for signature verification</param>
-    /// <returns>Signature verification result</returns>
-    public static SignatureVerificationResult VerifySignature(JsonElement attributes, string? secretKey = null)
+    /// <param name="attributes">The parsed JsonElement containing event attributes</param>
+    /// <param name="secret">The merchant's access secret key</param>
+    /// <returns>True if signature is valid, false otherwise</returns>
+    public static bool VerifySignature(JsonElement attributes, string secret)
     {
         var logger = Log.Logger.GetInstance();
+        var eventTypeStr = JsonUtils.TryGetString(attributes, JsonKeys.EventType);
 
-        // event_type is required - treat missing event_type as invalid payload
-        var eventTypeStr = TryGetString(attributes, JsonKeys.EventType);
         if (string.IsNullOrWhiteSpace(eventTypeStr))
         {
-            var failMsg = $"Missing required field: {JsonKeys.EventType}. Invalid webhook payload.";
+            var failMsg = $"Missing required field: {JsonKeys.EventType}. Invalid payload.";
             logger.ErrorWithCaller($"{ErrorMessages.MessageSignatureVerificationFailed} - {failMsg}");
-            return SignatureVerificationResult.FromFailed(failMsg);
+            return false;
         }
 
         var webhookEventType = WebhookEventTypeExtensions.ParseEventType(eventTypeStr);
+        bool success;
 
         // Route to appropriate verification method based on event type
         if (webhookEventType.IsPaymentLinkEvent())
         {
-            return VerifyPaymentLinkSignature(attributes, secretKey);
+            success = VerifyPaymentLinkSignature(attributes, secret);
+        }
+        else if (webhookEventType.IsRefundEvent())
+        {
+            success = VerifyRefundSignature(attributes, secret);
+        }
+        else
+        {
+             // Default to payment signature verification
+            success = VerifyPaymentSignature(attributes, secret);
         }
 
-        if (webhookEventType.IsRefundEvent())
+        if (!success)
         {
-            return VerifyRefundSignature(attributes, secretKey);
-        }
-
-        // Default to payment signature verification (PaymentSuccess or other payment events)
-        return VerifyPaymentSignature(attributes, secretKey);
-    }
-
-    public static SignatureVerificationResult VerifyAndParseWebhook(string payload, string secret, out JsonElement parsed)
-    {
-        var logger = Log.Logger.GetInstance();
-        using var doc = JsonDocument.Parse(payload);
-        parsed = doc.RootElement.Clone();
-        var result = VerifySignature(parsed, secret);
-        if (!result.Success)
-        {
-            logger.ErrorWithCaller($"{ErrorMessages.MessageWebhookVerificationFailed}: {result.Message}");
+            logger.ErrorWithCaller($"{ErrorMessages.MessageWebhookVerificationFailed}");
         }
         else
         {
             logger.InfoWithCaller($"{ErrorMessages.MessageSignatureVerificationSuccess}");
         }
-        return result;
+        return success;
     }
 
-    public static JsonElement? ParseWebhookEvent(string payload)
+    private static bool VerifyPayloadAndSignature(string signatureVersion, string? signature, string payload, List<string> missing, string failDetails, string okDetails, string secret, Log.Logger logger)
     {
-        if (string.IsNullOrWhiteSpace(payload)) return null;
-        try
+        // Only support v3 signature format
+        if (signatureVersion != SdkConstants.SignatureVersionV3)
         {
-            using var doc = JsonDocument.Parse(payload);
-            return doc.RootElement.Clone();
+            var failMsg = $"Unsupported signature version: {signatureVersion}. Only {SdkConstants.SignatureVersionV3} is supported.";
+            logger.ErrorWithCaller($"{ErrorMessages.MessageSignatureVerificationFailed} - {failMsg}");
+            return false;
         }
-        catch (System.Exception ex)
+
+        if (missing != null && missing.Count > 0)
         {
-            var logger = Log.Logger.GetInstance();
-            logger.ErrorWithCaller($"{ErrorMessages.MessageWebhookParseError}: {ex.Message}");
-            return null;
+            logger.ErrorWithCaller($"{ErrorMessages.MessageSignatureVerificationMissingParams}: {string.Join(", ", missing)}");
+            return false;
         }
+
+        var expected = GenerateHmacSignature(payload, secret);
+        if (!SecureStringEquals(expected, signature ?? string.Empty))
+        {
+            logger.ErrorWithCaller($"{ErrorMessages.MessageSignatureVerificationFailed} - {failDetails}");
+            return false;
+        }
+
+        var successMsg = ErrorMessages.MessageSignatureVerificationSuccess;
+        logger.InfoWithCaller($"{successMsg} - {okDetails}");
+        return true;
     }
 
-    public static string GenerateHmacSignature(string payload, string secret)
+    private static (string secret, Log.Logger logger) InitializeVerifier(string? secretKey)
+    {
+        var secret = string.IsNullOrWhiteSpace(secretKey) ? throw new ArgumentException(ErrorMessages.SecretKeyRequired, nameof(secretKey)) : secretKey!;
+        var logger = Log.Logger.GetInstance();
+        return (secret, logger);
+    }
+
+    private static string GenerateHmacSignature(string payload, string secret)
     {
         using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(secret));
         var signature = hmac.ComputeHash(Encoding.UTF8.GetBytes(payload));
         return BitConverter.ToString(signature).Replace("-", "").ToLowerInvariant();
     }
 
-    public static bool SecureStringEquals(string expected, string actual)
+    private static bool SecureStringEquals(string expected, string actual)
     {
         if (expected == null || actual == null) return false;
         if (expected.Length != actual.Length) return false;
@@ -328,37 +299,5 @@ public class SignatureVerifier
     {
         return amount.ToString("0.00", CultureInfo.InvariantCulture);
     }
-
-    private static string? TryGetString(JsonElement element, string propertyName)
-    {
-        if (element.ValueKind != JsonValueKind.Object) return null;
-        return element.TryGetProperty(propertyName, out var value) && value.ValueKind is JsonValueKind.String
-            ? value.GetString()
-            : null;
-    }
-
-    private static double? TryGetDouble(JsonElement element, string propertyName)
-    {
-        if (element.ValueKind != JsonValueKind.Object) return null;
-        if (!element.TryGetProperty(propertyName, out var value)) return null;
-
-        if (value.ValueKind == JsonValueKind.Number && value.TryGetDouble(out var d)) return d;
-        if (value.ValueKind == JsonValueKind.String && double.TryParse(value.GetString(), NumberStyles.Any, CultureInfo.InvariantCulture, out var ds)) return ds;
-        return null;
-    }
 }
 
-public record SignatureVerificationResult(bool Success, string Message, SignatureVerificationError? Error)
-{
-    public static SignatureVerificationResult FromSuccess(string details) =>
-        new(true, $"Signature verification succeeded - {details}", null);
-
-    public static SignatureVerificationResult FromFailed(string details) =>
-        new(false, $"Signature verification failed - {details}", new SignatureVerificationError(ErrorCodes.SignatureVerificationFailed, details));
-
-    public static SignatureVerificationResult FromMissingParams(IEnumerable<string> missing) =>
-        new(false, $"Signature verification failed - Missing {string.Join(", ", missing)}",
-            new SignatureVerificationError(ErrorCodes.SignatureVerificationMissingParams, $"Missing {string.Join(", ", missing)}"));
-}
-
-public record SignatureVerificationError(string Code, string MerchantMessage);

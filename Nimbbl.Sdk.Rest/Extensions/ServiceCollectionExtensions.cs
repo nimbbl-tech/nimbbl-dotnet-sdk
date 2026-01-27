@@ -1,5 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
-using Nimbbl.Sdk.Rest.Api;
+using Nimbbl.Sdk.Rest;
 
 namespace Nimbbl.Sdk.Rest.Extensions;
 

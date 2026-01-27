@@ -1,5 +1,5 @@
 using System;
-using Nimbbl.Sdk.Rest.Api;
+using Nimbbl.Sdk.Rest;
 
 namespace Nimbbl.Sdk.Rest.Test;
 

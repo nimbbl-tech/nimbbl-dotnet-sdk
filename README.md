@@ -53,9 +53,8 @@ The SDK uses environment variables for configuration. You can provide them via:
 
 ### Optional Environment Variables
 
-- `NIMBBL_ENABLE_LOGGING` - Enable/disable logging (defaults to `false`)
-- `NIMBBL_DEBUG_LOGGING` - Enable/disable debug logging (defaults to `false`)
-- `NIMBBL_LOG_FILE` - Log file path (defaults to `logs/nimbbl_debug.log` when logging is enabled)
+- `NIMBBL_DEBUG_LOGGING` - Enable/disable debug logging (defaults to `false`). Note: INFO/WARNING/ERROR logs are always emitted; debug logs show unmasked raw payloads.
+- `NIMBBL_LOG_FILE` - Log file path (defaults to `logs/nimbbl_debug.log`)
 - `NIMBBL_CHECKOUT_HOST` - Override checkout host (optional)
 
 **Note:** The SDK uses the production API host (`https://api.nimbbl.tech`) by default. For testing environments, you can configure a custom base URL when initializing the SDK.
@@ -76,8 +75,7 @@ EnvLoader.LoadEnvFile();
 var api = NimbblApi.Initialize(
     accessKey: Environment.GetEnvironmentVariable("NIMBBL_ACCESS_KEY")!,
     accessSecret: Environment.GetEnvironmentVariable("NIMBBL_ACCESS_SECRET")!,
-    enableLogging: true,  // Set to true to enable logging (disabled by default)
-    debugLogging: false,   // Set to true to enable debug logging with unmasked data
+    debugLogging: false,   // Set to true to enable debug logging (unmasked raw JSON)
     logFilePath: "logs/nimbbl_debug.log"
 );
 
@@ -120,8 +118,7 @@ using Nimbbl.Sdk.Rest.Extensions;
 builder.Services.AddNimbbl(
     accessKey: Environment.GetEnvironmentVariable("NIMBBL_ACCESS_KEY")!,
     accessSecret: Environment.GetEnvironmentVariable("NIMBBL_ACCESS_SECRET")!,
-    enableLogging: true,  // Set to true to enable logging (disabled by default)
-    debugLogging: false, // Set to true to enable debug logging with unmasked data
+    debugLogging: false, // Set to true to enable debug logging (unmasked raw JSON)
     logFilePath: "logs/nimbbl_debug.log"
 );
 
@@ -274,8 +271,8 @@ var partialRefund = await api.Refunds().InitiateRefundAsync(new Dictionary<strin
 ```c#
 // Enquiry by transaction ID
 var txn = await api.Transactions().TransactionEnquiryAsync(new Dictionary<string, object?> { ["transaction_id"] = "transaction_id" });
-// Enquiry by order ID
-var txnByOrder = await api.Transactions().GetByOrderIdAsync("order_id");
+// Enquiry by order ID or invoice_id
+var txnByOrder = await api.Transactions().TransactionEnquiryAsync(new Dictionary<string, object?> { ["order_id"] = "order_id" });
 ```
 
 ### Checkout Utilities API (dictionary payloads)
@@ -306,22 +303,29 @@ api.SetBearerToken("order_token_here", expiresAtUtc: DateTime.UtcNow.AddMinutes(
 ```
 
 ### Webhook
-
-Not exposed in this .NET build. Use `Common/NimbblUtils` for signature verification if needed.
+Webhooks are supported. Use `Common/SignatureVerifier` for signature verification:
+- `SignatureVerifier.VerifySignature(JsonElement attributes, string secret)` — verifies parsed JSON attributes.
+ - `SignatureVerifier.VerifyWebhookSignature(string payload, string secret, out JsonElement parsed)` — parses and verifies raw webhook payload.
 
 ## Project Structure
 
 ```text
 Nimbbl.Sdk.Rest/
-├── Orders/              # Orders API
-├── Payments/            # Payments API
-├── PaymentLinks/        # Payment Links API
-├── Addresses/           # Addresses API
-├── Refunds/             # Refunds API
-├── TransactionStatus/   # (removed; use Transactions)
-├── CheckoutUtilities/    # Checkout Utilities API
-├── Transactions/         # Transactions API
-└── RestClient/          # HTTP client implementation
+├── Api/                  # SDK entrypoint (NimbblApi)
+├── Common/               # Shared helpers, constants, signature verifier, encryption
+├── Exception/            # Typed SDK exceptions (NimbblException, NotFoundException, etc.)
+├── Extensions/           # DI extensions (AddNimbbl)
+├── Log/                  # Logger implementation and helpers
+├── RestClient/           # HTTP client and low-level Rest primitives (ApiClient, NimbblClient)
+├── Services/             # High-level API services
+│   ├── Orders.cs
+│   ├── Payments.cs
+│   ├── PaymentLinks.cs
+│   ├── Addresses.cs
+│   ├── Refunds.cs
+│   ├── CheckoutUtilities.cs
+│   └── Transactions.cs
+└── Nimbbl.Sdk.Rest.csproj
 ```
 
 ## Documentation

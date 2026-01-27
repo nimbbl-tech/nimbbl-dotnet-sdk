@@ -1,7 +1,7 @@
 using System;
 using System.Text.Json;
 using System.Threading.Tasks;
-using Nimbbl.Sdk.Rest.Api;
+using Nimbbl.Sdk.Rest;
 using Xunit;
 namespace Nimbbl.Sdk.Rest.Test;
 

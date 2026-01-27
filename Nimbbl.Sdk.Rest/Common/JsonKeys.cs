@@ -13,6 +13,8 @@ public static class JsonKeys
     public const string Error = "error";
     public const string Message = "message";
     public const string Valid = "valid";
+    public const string Received = "received";
+    public const string Parsed = "parsed";
 
     // Token response/request JSON keys
     public const string Token = "token";
@@ -24,6 +26,7 @@ public static class JsonKeys
     // Encryption JSON keys
     public const string EncryptedPayload = "encrypted_payload";
     public const string EncryptedResponse = "encrypted_response";
+    public const string Payload = "payload";
 
     // Request parameter keys
     public const string InvoiceId = "invoice_id";
@@ -44,16 +47,30 @@ public static class JsonKeys
     public const string Signature = "signature";
     public const string NimbblSignature = "nimbbl_signature";
     public const string SignatureVersion = "signature_version";
+    public const string SignatureValid = "signature_valid";
+    public const string SignatureMessage = "signature_message";
+    public const string SignatureError = "signature_error";
+    public const string SignatureVerificationSkipped = "signature_verification_skipped";
     public const string RefundAmount = "refund_amount";
     public const string RefundStatus = "refund_status";
+    public const string PaymentTransactionAmount = "payment_transaction_amount";
     public const string PaymentLinkHash = "payment_link_hash";
     public const string AmountPaid = "amount_paid";
     public const string PaymentLinkAmountPaid = "payment_link_amount_paid";
     public const string Currency = "currency";
     public const string Amount = "amount";
+    public const string AmountBeforeTax = "amount_before_tax";
+    public const string Reason = "reason";
+    public const string PaymentMode = "payment_mode";
     public const string Type = "type";
     public const string Transaction = "transaction";
     public const string Order = "order";
+    public const string Callback = "callback";
+    public const string User = "user";
+    public const string Name = "name";
+
+    // Event type values
+    public const string GlobalHandleCheckoutResponse = "globalHandleCheckoutResponse";
 
     // Transaction type values
     public const string TransactionTypePayment = "payment";

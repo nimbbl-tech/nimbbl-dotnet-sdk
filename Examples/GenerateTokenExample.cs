@@ -1,5 +1,5 @@
 using System.Text.Json;
-using Nimbbl.Sdk.Rest.Api;
+using Nimbbl.Sdk.Rest;
 
 namespace Examples;
 

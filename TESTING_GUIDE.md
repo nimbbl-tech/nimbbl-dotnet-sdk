@@ -103,7 +103,7 @@ cd /path/to/nimbbl-dotnet-sdk
    ```env
    NIMBBL_ACCESS_KEY=your_access_key_here
    NIMBBL_ACCESS_SECRET=your_access_secret_here
-   NIMBBL_ENABLE_LOGGING=true
+   # INFO/WARNING/ERROR logs are always enabled. Set DEBUG to true to enable unmasked debug logs.
    NIMBBL_DEBUG_LOGGING=false
    NIMBBL_LOG_FILE=logs/nimbbl_debug.log
    ```
@@ -211,7 +211,7 @@ Build succeeded.
    ```env
    NIMBBL_ACCESS_KEY=your_access_key_here
    NIMBBL_ACCESS_SECRET=your_access_secret_here
-   NIMBBL_ENABLE_LOGGING=true
+   # INFO/WARNING/ERROR logs are always enabled. Set DEBUG to true to enable unmasked debug logs.
    NIMBBL_DEBUG_LOGGING=false
    NIMBBL_LOG_FILE=logs/nimbbl_debug.log
    ```
@@ -325,7 +325,7 @@ cd /path/to/nimbbl-dotnet-sdk
    ```env
    NIMBBL_ACCESS_KEY=your_access_key_here
    NIMBBL_ACCESS_SECRET=your_access_secret_here
-   NIMBBL_ENABLE_LOGGING=true
+   # INFO/WARNING/ERROR logs are always enabled. Set DEBUG to true to enable unmasked debug logs.
    NIMBBL_DEBUG_LOGGING=false
    NIMBBL_LOG_FILE=logs/nimbbl_debug.log
    ```
@@ -337,7 +337,8 @@ cd /path/to/nimbbl-dotnet-sdk
 ```powershell
 $env:NIMBBL_ACCESS_KEY="your_access_key_here"
 $env:NIMBBL_ACCESS_SECRET="your_access_secret_here"
-$env:NIMBBL_ENABLE_LOGGING="true"
+# Use DEBUG logging for unmasked debug logs; INFO/WARN/ERROR are always enabled.
+$env:NIMBBL_DEBUG_LOGGING="false"
 ```
 
 ###### For Linux/Mac (Bash)
@@ -345,7 +346,7 @@ $env:NIMBBL_ENABLE_LOGGING="true"
 ```bash
 export NIMBBL_ACCESS_KEY="your_access_key_here"
 export NIMBBL_ACCESS_SECRET="your_access_secret_here"
-export NIMBBL_ENABLE_LOGGING="true"
+export NIMBBL_DEBUG_LOGGING="false"
 ```
 
 **Note:** MerchantSampleApp reads credentials from environment variables (loaded from `.env` file via `EnvLoader.LoadEnvFile()` in `Program.cs`). The `.env` file is automatically loaded if it exists in the project directory or parent directories.
@@ -659,10 +660,14 @@ dotnet build
 
 **Solution:**
 
-- Enable logging: Set `NIMBBL_ENABLE_LOGGING=true` in `.env` file or environment variables
+- Enable debug logging: Set `NIMBBL_DEBUG_LOGGING=true` in `.env` file or environment variables. INFO/WARNING/ERROR logs are always emitted.
 - Check if log directory exists: `logs/`
 - Verify write permissions for log directory
 - Check log file path configuration
+ - Enable debug logging: Set `NIMBBL_DEBUG_LOGGING=true` in `.env` file or environment variables. INFO/WARNING/ERROR logs are always emitted.
+ - Check if log directory exists: `logs/`
+ - Verify write permissions for log directory
+ - Check log file path configuration
 
 #### 5. Port Already in Use
 
