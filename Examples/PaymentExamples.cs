@@ -23,14 +23,9 @@ public static class PaymentExamples
             return;
         }
         
-        var callbackUrl = Helpers.GetInput("Enter Callback URL (mandatory): ");
-        if (string.IsNullOrWhiteSpace(callbackUrl))
-        {
-            Helpers.PrintError("Callback URL is required.\n");
-            return;
-        }
+        var callbackUrl = Helpers.GetInput("Enter Callback URL (optional): ", false);
         
-        var paymentMode = Helpers.GetInput("Enter Payment Mode Code (net_banking/credit_card/etc): ", false) ?? CheckoutConstants.PaymentModeNetBanking;
+        var paymentMode = Helpers.GetInput("Enter Payment Mode Code (net_banking/credit_card/etc): ", false) ?? "net_banking";
         
         var data = new Dictionary<string, object?>
         {
@@ -39,20 +34,77 @@ public static class PaymentExamples
             ["callback_url"] = callbackUrl
         };
         
-        // Bank code is mandatory for net_banking
-        if (paymentMode.Equals(CheckoutConstants.PaymentModeNetBanking, StringComparison.OrdinalIgnoreCase))
+        // Payment mode specific data
+        switch (paymentMode.ToLower())
         {
-            Helpers.PrintInfo("Bank Code is required for net_banking payment mode.\n");
-            var bankCode = Helpers.GetInput("Enter Bank Code (default: HDFC): ", false) ?? "HDFC";
-            data[CheckoutConstants.OptionKeyBankCode] = bankCode;
-        }
-        else
-        {
-            var bankCode = Helpers.GetInput("Enter Bank Code (optional, for net_banking only): ", false);
-            if (!string.IsNullOrWhiteSpace(bankCode))
-            {
+            case "net_banking":
+                Helpers.PrintInfo("Bank Code is required for net_banking payment mode.\n");
+                var bankCode = Helpers.GetInput("Enter Bank Code (default: HDFC): ", false) ?? "HDFC";
                 data[CheckoutConstants.OptionKeyBankCode] = bankCode;
-            }
+                break;
+            case "upi":
+                var paymentFlow = Helpers.GetInput("Enter UPI Payment Flow (intent/collect): ", false) ?? "intent";
+                data["payment_flow"] = paymentFlow;
+                
+                var upiId = Helpers.GetInput("Enter UPI ID (optional): ", false);
+                if (!string.IsNullOrWhiteSpace(upiId))
+                {
+                    data["upi_id"] = upiId;
+                }
+                
+                var upiAppCode = Helpers.GetInput("Enter UPI App Code (gpay/phonepe/paytm - optional): ", false);
+                if (!string.IsNullOrWhiteSpace(upiAppCode))
+                {
+                    data["upi_app_code"] = upiAppCode;
+                }
+                break;
+            case "wallet":
+                var walletCode = Helpers.GetInput("Enter Wallet Code (e.g., FREECHARGE): ");
+                if (string.IsNullOrWhiteSpace(walletCode))
+                {
+                    Helpers.PrintError("Wallet Code is required for wallet payment mode.\n");
+                    return;
+                }
+                data["wallet_code"] = walletCode;
+                break;
+            case "credit_card":
+            case "debit_card": // Often share similar fields
+                var cardNo = Helpers.GetInput("Enter Card Number: ");
+                if (string.IsNullOrWhiteSpace(cardNo))
+                {
+                    Helpers.PrintError("Card Number is required.\n");
+                    return;
+                }
+                data["card_no"] = cardNo;
+                
+                var cardInputType = Helpers.GetInput("Enter Card Input Type (card_pan/token - default: card_pan): ", false) ?? "card_pan";
+                data["card_input_type"] = cardInputType;
+                
+                var cvv = Helpers.GetInput("Enter CVV: ");
+                if (string.IsNullOrWhiteSpace(cvv))
+                {
+                    Helpers.PrintError("CVV is required.\n");
+                    return;
+                }
+                data["cvv"] = cvv;
+                
+                var cardHolderName = Helpers.GetInput("Enter Card Holder Name: ");
+                if (!string.IsNullOrWhiteSpace(cardHolderName))
+                {
+                    data["card_holder_name"] = cardHolderName;
+                }
+                
+                var expiry = Helpers.GetInput("Enter Expiry (MM/YY): ");
+                if (string.IsNullOrWhiteSpace(expiry))
+                {
+                    Helpers.PrintError("Expiry is required (MM/YY format).\n");
+                    return;
+                }
+                data["expiry"] = expiry;
+                break;
+            default:
+                Helpers.PrintInfo($"No specific additional data required for {paymentMode} mode.\n");
+                break;
         }
         
         try
