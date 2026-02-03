@@ -459,7 +459,7 @@ dotnet pack --no-build
 
 The package will be created in:
 ```
-Nimbbl.Sdk.Rest/bin/Release/Nimbbl.Sdk.Rest.1.3.5-rc3.nupkg
+Nimbbl.Sdk.Rest/bin/Release/Nimbbl.Sdk.Rest.1.3.5.nupkg
 ```
 
 ### Package Contents
@@ -753,7 +753,7 @@ Edit `Nimbbl.Sdk.Rest/Nimbbl.Sdk.Rest.csproj`:
 ---
 
 **Last Updated**: 2025-01-26  
-**SDK Version**: 1.3.5-rc6  
+**SDK Version**: 1.3.5  
 **Target Framework**: .NET 8.0
 
 ## Configuration

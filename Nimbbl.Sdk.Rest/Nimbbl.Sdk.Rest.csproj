@@ -5,10 +5,7 @@
         <Nullable>enable</Nullable>
         
         <!-- Package Information -->
-        <Version>1.3.5-rc6</Version>
-        <AssemblyVersion>1.3.5.0</AssemblyVersion>
-        <FileVersion>1.3.5.0</FileVersion>
-        <InformationalVersion>1.3.5-rc6</InformationalVersion>
+        <Version>1.3.5</Version>
         <PackageId>Nimbbl.Sdk.Rest</PackageId>
         <Authors>Nimbbl</Authors>
         <Company>Nimbbl</Company>

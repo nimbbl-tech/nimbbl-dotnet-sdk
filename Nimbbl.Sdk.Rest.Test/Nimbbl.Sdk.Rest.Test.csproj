@@ -20,7 +20,7 @@
     <!-- Use published SDK from NuGet (default) -->
     <!--
     <ItemGroup>
-        <PackageReference Include="Nimbbl.Sdk.Rest" Version="1.3.5-rc6" />
+        <PackageReference Include="Nimbbl.Sdk.Rest" Version="1.3.5" />
     </ItemGroup>
     -->
 
