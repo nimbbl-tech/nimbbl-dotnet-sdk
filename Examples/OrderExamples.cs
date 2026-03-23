@@ -1,6 +1,6 @@
 using System.Text.Json;
 using Nimbbl.Sdk.Rest;
-using Nimbbl.Sdk.Rest.Api;
+using Nimbbl.Sdk.Rest;
 using Nimbbl.Sdk.Rest.Exception;
 
 namespace Examples;
@@ -23,7 +23,7 @@ public static class OrderExamples
             if (string.IsNullOrWhiteSpace(invoiceId))
             {
                 // Auto-generate a unique invoice ID if user leaves it blank
-                invoiceId = $"INV-{DateTime.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid().ToString("N")[..6]}";
+                invoiceId = Helpers.GenerateInvoiceId("INV");
                 Helpers.PrintInfo($"Generated Invoice ID: {invoiceId}\n");
             }
             
@@ -74,20 +74,7 @@ public static class OrderExamples
                 ((Dictionary<string, object?>)orderData["user"]!)["last_name"] = lastName;
             }
             
-            // Generate merchant token first
-            var tokenResponse = await api.Auth().GenerateTokenAsync();
-            var merchantToken = tokenResponse.TryGetProperty("token", out var tokenProp) 
-                ? tokenProp.GetString() 
-                : null;
-            
-            if (string.IsNullOrWhiteSpace(merchantToken))
-            {
-                Helpers.PrintError("Failed to generate merchant token.\n");
-                return;
-            }
-            
-            api.SetBearerToken(merchantToken);
-            
+            // Merchant token is automatically generated and used for authentication
             var order = await api.Orders().CreateOrderAsync(orderData);
             
             if (order.TryGetProperty("error", out var errorProp))
@@ -127,16 +114,7 @@ public static class OrderExamples
                 return;
             }
             
-            // Get order token
-            var orderToken = Helpers.GetInput("Enter Order Token: ", false);
-            if (string.IsNullOrWhiteSpace(orderToken))
-            {
-                Helpers.PrintError("Order Token is required. Create an order first to get the token.\n");
-                return;
-            }
-            
-            api.SetBearerToken(orderToken);
-            
+            // Merchant token is automatically generated and used for authentication
             var order = await api.Orders().GetOrderByIdAsync(orderId);
             
             if (order.TryGetProperty("error", out var errorProp))
@@ -181,16 +159,7 @@ public static class OrderExamples
                 return;
             }
             
-            // Get order token
-            var orderToken = Helpers.GetInput("Enter Order Token: ", false);
-            if (string.IsNullOrWhiteSpace(orderToken))
-            {
-                Helpers.PrintError("Order Token is required. Create an order first to get the token.\n");
-                return;
-            }
-            
-            api.SetBearerToken(orderToken);
-            
+            // Merchant token is automatically generated and used for authentication
             var order = await api.Orders().GetOrderByInvoiceIdAsync(invoiceId);
             
             if (order.TryGetProperty("error", out var errorProp))

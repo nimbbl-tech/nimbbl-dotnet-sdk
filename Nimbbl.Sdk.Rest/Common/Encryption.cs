@@ -1,21 +1,26 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Org.BouncyCastle.Crypto.Engines;
+using Org.BouncyCastle.Crypto.Modes;
+using Org.BouncyCastle.Crypto.Parameters;
 using Nimbbl.Sdk.Rest.Exception;
-using Nimbbl.Sdk.Rest.Log;
+using LoggerClass = Nimbbl.Sdk.Rest.Log.Logger;
 
 namespace Nimbbl.Sdk.Rest.Common;
 
 /// <summary>
 /// Encryption helper implementing AES-GCM Encryption/Decryption as per Nimbbl API documentation.
+/// Uses BouncyCastle library for full 16-byte nonce support (required by Nimbbl specification).
 /// </summary>
 public class Encryption
 {
-    private const int GCM_TAG_LENGTH = 16;
-    private const int GCM_NONCE_LENGTH = 16;
+    private const int GCM_TAG_LENGTH = 16; // 16 bytes = 128 bits (authentication tag)
+    private const int GCM_NONCE_LENGTH = 16; // Nimbbl spec uses 16 bytes for nonce
     
     private readonly byte[] _encryptionKey;
     private readonly int _keyIterations;
+    private readonly LoggerClass _logger;
 
     /// <summary>
     /// Constructor
@@ -24,11 +29,12 @@ public class Encryption
     {
         if (string.IsNullOrWhiteSpace(accessSecret))
         {
-            throw new NimbblException(ErrorMessages.AccessSecretRequired, 400, ErrorCodes.InvalidAccessSecret);
+            throw new NimbblException(ErrorMessages.AccessSecretRequired, HttpStatusCodes.BadRequest, ErrorCodes.InvalidAccessSecret);
         }
 
         _keyIterations = keyIterations;
         _encryptionKey = GenerateKey(accessSecret);
+        _logger = LoggerClass.GetInstance();
     }
 
     private byte[] GenerateKey(string accessSecret)
@@ -52,10 +58,9 @@ public class Encryption
     /// </summary>
     public string Decrypt(string encryptedData, bool returnAsArray = false)
     {
-        var logger = Log.Logger.GetInstance();
         try
         {
-            logger.Debug($"Encryption::decrypt() called - Input length: {encryptedData.Length}, returnAsArray: {returnAsArray}");
+            _logger.DebugWithCaller($"Encryption::decrypt() called - Input length: {encryptedData.Length}, returnAsArray: {returnAsArray}");
             
             // Convert hex string to bytes
             byte[] encryptedBytes;
@@ -65,17 +70,17 @@ public class Encryption
             }
             catch
             {
-                logger.Error("Encryption::decrypt() - Invalid hex string provided");
-                throw new NimbblException(ErrorMessages.InvalidHexString, 400, ErrorCodes.InvalidHexString);
+                _logger.ErrorWithCaller("Encryption::decrypt() - Invalid hex string provided");
+                throw new NimbblException(ErrorMessages.InvalidHexString, HttpStatusCodes.BadRequest, ErrorCodes.InvalidHexString);
             }
             
-            logger.Debug($"Encryption::decrypt() - Hex conversion successful, bytes length: {encryptedBytes.Length}");
+            _logger.DebugWithCaller($"Encryption::decrypt() - Hex conversion successful, bytes length: {encryptedBytes.Length}");
 
             // Verify minimum length (nonce + tag = 32 bytes minimum)
             var minLength = GCM_NONCE_LENGTH + GCM_TAG_LENGTH;
             if (encryptedBytes.Length < minLength)
             {
-                logger.Error($"Encryption::decrypt() - Encrypted data too short. Expected: {minLength}, Got: {encryptedBytes.Length}");
+                _logger.ErrorWithCaller($"Encryption::decrypt() - Encrypted data too short. Expected: {minLength}, Got: {encryptedBytes.Length}");
                 throw new NimbblException(
                     $"Encrypted data too short. Expected at least {minLength} bytes, got {encryptedBytes.Length}",
                     400,
@@ -83,32 +88,41 @@ public class Encryption
                 );
             }
 
-            // Extract nonce (first 16 bytes)
+            // Extract nonce (first 16 bytes per Nimbbl spec)
             var nonce = new byte[GCM_NONCE_LENGTH];
             Array.Copy(encryptedBytes, 0, nonce, 0, GCM_NONCE_LENGTH);
-            logger.Debug($"Encryption::decrypt() - Extracted nonce, length: {nonce.Length}");
+            _logger.DebugWithCaller($"Encryption::decrypt() - Extracted nonce, length: {nonce.Length}");
 
             // Extract tag (last 16 bytes)
             var tag = new byte[GCM_TAG_LENGTH];
             Array.Copy(encryptedBytes, encryptedBytes.Length - GCM_TAG_LENGTH, tag, 0, GCM_TAG_LENGTH);
-            logger.Debug($"Encryption::decrypt() - Extracted tag, length: {tag.Length}");
+            _logger.DebugWithCaller($"Encryption::decrypt() - Extracted tag, length: {tag.Length}");
 
             // Extract ciphertext (middle bytes)
             var ciphertextLength = encryptedBytes.Length - GCM_NONCE_LENGTH - GCM_TAG_LENGTH;
             var ciphertext = new byte[ciphertextLength];
             Array.Copy(encryptedBytes, GCM_NONCE_LENGTH, ciphertext, 0, ciphertextLength);
-            logger.Debug($"Encryption::decrypt() - Extracted ciphertext, length: {ciphertext.Length}");
+            _logger.DebugWithCaller($"Encryption::decrypt() - Extracted ciphertext, length: {ciphertext.Length}");
 
-            // Decrypt with AES-256-GCM
-            logger.Debug("Encryption::decrypt() - Decrypting with AES-256-GCM");
+            // Decrypt with AES-256-GCM using BouncyCastle (supports 16-byte nonce)
+            _logger.DebugWithCaller("Encryption::decrypt() - Decrypting with AES-256-GCM using BouncyCastle");
             byte[] plaintext;
-            using (var aesGcm = new AesGcm(_encryptionKey, GCM_TAG_LENGTH))
-            {
-                plaintext = new byte[ciphertextLength];
-                aesGcm.Decrypt(nonce, ciphertext, tag, plaintext);
-            }
+            
+            var cipher = new GcmBlockCipher(new AesEngine());
+            var keyParam = new KeyParameter(_encryptionKey);
+            var parameters = new AeadParameters(keyParam, GCM_TAG_LENGTH * 8, nonce);
+            cipher.Init(false, parameters); // false = decrypt mode
+            
+            // Combine ciphertext and tag for BouncyCastle (it expects them together)
+            var ciphertextWithTag = new byte[ciphertext.Length + tag.Length];
+            Array.Copy(ciphertext, 0, ciphertextWithTag, 0, ciphertext.Length);
+            Array.Copy(tag, 0, ciphertextWithTag, ciphertext.Length, tag.Length);
+            
+            plaintext = new byte[cipher.GetOutputSize(ciphertextWithTag.Length)];
+            var len = cipher.ProcessBytes(ciphertextWithTag, 0, ciphertextWithTag.Length, plaintext, 0);
+            cipher.DoFinal(plaintext, len);
 
-            logger.Debug($"Encryption::decrypt() - Decryption successful, plaintext length: {plaintext.Length}");
+            _logger.DebugWithCaller($"Encryption::decrypt() - Decryption successful, plaintext length: {plaintext.Length}");
 
             var plaintextString = Encoding.UTF8.GetString(plaintext);
 
@@ -120,17 +134,17 @@ public class Encryption
                     var decoded = JsonSerializer.Deserialize<Dictionary<string, object?>>(plaintextString);
                     if (decoded != null)
                     {
-                        logger.Debug("Encryption::decrypt() - JSON decode successful, returning array");
+                        _logger.DebugWithCaller("Encryption::decrypt() - JSON decode successful, returning array");
                         return JsonSerializer.Serialize(decoded);
                     }
                 }
                 catch
                 {
-                    logger.Debug("Encryption::decrypt() - JSON decode failed, returning plaintext");
+                    _logger.DebugWithCaller("Encryption::decrypt() - JSON decode failed, returning plaintext");
                 }
             }
 
-            logger.Debug("Encryption::decrypt() - Returning plaintext");
+            _logger.DebugWithCaller("Encryption::decrypt() - Returning plaintext");
             return plaintextString;
         }
         catch (NimbblException)
@@ -139,8 +153,8 @@ public class Encryption
         }
         catch (System.Exception ex)
         {
-            logger.Exception($"Decryption error: {ex.Message}", ex);
-            throw new NimbblException(string.Format(ErrorMessages.DecryptionError, ex.Message), 500, ErrorCodes.DecryptionError);
+            _logger.ExceptionWithCaller($"Decryption error: {ex.Message}", ex);
+            throw new NimbblException(string.Format(ErrorMessages.DecryptionError, ex.Message), HttpStatusCodes.Unknown, ErrorCodes.DecryptionError);
         }
     }
 
@@ -149,10 +163,9 @@ public class Encryption
     /// </summary>
     public string Encrypt(object data)
     {
-        var logger = Log.Logger.GetInstance();
         try
         {
-            logger.Debug($"Encryption::encrypt() called - Input type: {data.GetType().Name}");
+            _logger.DebugWithCaller($"Encryption::encrypt() called - Input type: {data.GetType().Name}");
             
             // Convert data to string
             string plaintext;
@@ -163,42 +176,52 @@ public class Encryption
             else
             {
                 plaintext = JsonSerializer.Serialize(data);
-                logger.Debug($"Encryption::encrypt() - Converted to JSON, length: {plaintext.Length}");
+                _logger.DebugWithCaller($"Encryption::encrypt() - Converted to JSON, length: {plaintext.Length}");
             }
 
             var plaintextBytes = Encoding.UTF8.GetBytes(plaintext);
 
-            // Generate random nonce (IV)
+            // Generate random nonce (IV) - 16 bytes as per Nimbbl specification
             var nonce = new byte[GCM_NONCE_LENGTH];
             using (var rng = RandomNumberGenerator.Create())
             {
                 rng.GetBytes(nonce);
             }
-            logger.Debug($"Encryption::encrypt() - Generated random nonce, length: {nonce.Length}");
+            _logger.DebugWithCaller($"Encryption::encrypt() - Generated random nonce, length: {nonce.Length}");
 
-            // Encrypt with AES-256-GCM
-            logger.Debug($"Encryption::encrypt() - Encrypting with AES-256-GCM, plaintext length: {plaintextBytes.Length}");
-            var ciphertext = new byte[plaintextBytes.Length];
-            var tag = new byte[GCM_TAG_LENGTH];
+            // Encrypt with AES-256-GCM using BouncyCastle (supports 16-byte nonce)
+            _logger.DebugWithCaller($"Encryption::encrypt() - Encrypting with AES-256-GCM using BouncyCastle, plaintext length: {plaintextBytes.Length}");
             
-            using (var aesGcm = new AesGcm(_encryptionKey, GCM_TAG_LENGTH))
-            {
-                aesGcm.Encrypt(nonce, plaintextBytes, ciphertext, tag);
-            }
+            var cipher = new GcmBlockCipher(new AesEngine());
+            var keyParam = new KeyParameter(_encryptionKey);
+            var parameters = new AeadParameters(keyParam, GCM_TAG_LENGTH * 8, nonce);
+            cipher.Init(true, parameters); // true = encrypt mode
+            
+            var encrypted = new byte[cipher.GetOutputSize(plaintextBytes.Length)];
+            var len = cipher.ProcessBytes(plaintextBytes, 0, plaintextBytes.Length, encrypted, 0);
+            cipher.DoFinal(encrypted, len);
+            
+            _logger.DebugWithCaller($"Encryption::encrypt() - Encryption successful, encrypted data length: {encrypted.Length}");
 
-            logger.Debug($"Encryption::encrypt() - Encryption successful, ciphertext length: {ciphertext.Length}");
+            // BouncyCastle returns ciphertext + tag together
+            // We need to separate them: ciphertext is all but last 16 bytes, tag is last 16 bytes
+            var ciphertextLength = encrypted.Length - GCM_TAG_LENGTH;
+            var ciphertext = new byte[ciphertextLength];
+            var tag = new byte[GCM_TAG_LENGTH];
+            Array.Copy(encrypted, 0, ciphertext, 0, ciphertextLength);
+            Array.Copy(encrypted, ciphertextLength, tag, 0, GCM_TAG_LENGTH);
 
-            // Concatenate: nonce + ciphertext + tag
+            // Concatenate: nonce (16 bytes) + ciphertext + tag (16 bytes) as per Nimbbl spec
             var encryptedData = new byte[nonce.Length + ciphertext.Length + tag.Length];
             Array.Copy(nonce, 0, encryptedData, 0, nonce.Length);
             Array.Copy(ciphertext, 0, encryptedData, nonce.Length, ciphertext.Length);
             Array.Copy(tag, 0, encryptedData, nonce.Length + ciphertext.Length, tag.Length);
             
-            logger.Debug($"Encryption::encrypt() - Concatenated encrypted data, total length: {encryptedData.Length} bytes");
+            _logger.DebugWithCaller($"Encryption::encrypt() - Concatenated encrypted data, total length: {encryptedData.Length} bytes");
 
             // Convert to hex string
             var hexResult = Convert.ToHexString(encryptedData).ToLowerInvariant();
-            logger.Debug($"Encryption::encrypt() - Converted to hex string, length: {hexResult.Length}");
+            _logger.DebugWithCaller($"Encryption::encrypt() - Converted to hex string, length: {hexResult.Length}");
             
             return hexResult;
         }
@@ -208,8 +231,8 @@ public class Encryption
         }
         catch (System.Exception ex)
         {
-            logger.Exception($"Encryption error: {ex.Message}", ex);
-            throw new NimbblException(string.Format(ErrorMessages.EncryptionError, ex.Message), 500, ErrorCodes.EncryptionError);
+            _logger.ExceptionWithCaller($"Encryption error: {ex.Message}", ex);
+            throw new NimbblException(string.Format(ErrorMessages.EncryptionError, ex.Message), HttpStatusCodes.Unknown, ErrorCodes.EncryptionError);
         }
     }
 }

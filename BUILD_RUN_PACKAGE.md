@@ -459,7 +459,7 @@ dotnet pack --no-build
 
 The package will be created in:
 ```
-Nimbbl.Sdk.Rest/bin/Release/Nimbbl.Sdk.Rest.1.3.4.nupkg
+Nimbbl.Sdk.Rest/bin/Release/Nimbbl.Sdk.Rest.1.3.5.nupkg
 ```
 
 ### Package Contents
@@ -494,8 +494,8 @@ dotnet add package Nimbbl.Sdk.Rest
 nimbbl-dotnet-sdk/
 ├── Nimbbl.Sdk.Rest/              # Main SDK library
 │   ├── Api/                      # Main API entry point
-│   │   └── NimbblApi.cs          # NimbblApi class (main facade)
-│   ├── NimbblClient.cs           # Main client class
+│   │   ├── NimbblApi.cs          # NimbblApi class (main facade)
+│   │   └── NimbblClient.cs       # Internal client (used by NimbblApi)
 │   ├── Orders/                   # Orders API
 │   │   └── Orders.cs
 │   ├── Addresses/                # Addresses API
@@ -508,7 +508,7 @@ nimbbl-dotnet-sdk/
 │   ├── NimbblCheckout/           # Checkout client
 │   ├── Common/                   # Common utilities
 │   │   ├── Encryption.cs
-│   │   ├── Util.cs
+│   │   ├── SignatureVerifier.cs
 │   │   └── EnvLoader.cs
 │   ├── Exception/                 # Exception classes
 │   ├── Log/                      # Logging
@@ -546,7 +546,7 @@ dotnet pack --configuration Release
 **Option 1: Using NimbblApi.Initialize() (Recommended)**
 
 ```csharp
-using Nimbbl.Sdk.Rest.Api;
+using Nimbbl.Sdk.Rest;
 using Nimbbl.Sdk.Rest.Common;
 
 // Load .env file (if using .env)
@@ -557,7 +557,6 @@ var api = NimbblApi.Initialize(
     accessKey: Environment.GetEnvironmentVariable("NIMBBL_ACCESS_KEY")!,
     accessSecret: Environment.GetEnvironmentVariable("NIMBBL_ACCESS_SECRET")!,
     apiHost: Environment.GetEnvironmentVariable("NIMBBL_API_HOST"),
-    enableLogging: true,
     debugLogging: false,
     logFilePath: "logs/nimbbl_debug.log"
 );
@@ -589,7 +588,6 @@ builder.Services.AddNimbbl(
     accessKey: Environment.GetEnvironmentVariable("NIMBBL_ACCESS_KEY")!,
     accessSecret: Environment.GetEnvironmentVariable("NIMBBL_ACCESS_SECRET")!,
     apiHost: Environment.GetEnvironmentVariable("NIMBBL_API_HOST"),
-    enableLogging: true,
     debugLogging: false,
     logFilePath: "logs/nimbbl_debug.log"
 );
@@ -624,7 +622,8 @@ Create a `.env` file in your project root:
 NIMBBL_ACCESS_KEY=your_access_key
 NIMBBL_ACCESS_SECRET=your_access_secret
 NIMBBL_API_HOST=https://api.nimbbl.tech
-NIMBBL_ENABLE_LOGGING=true
+## Logging configuration
+# NOTE: INFO/WARNING/ERROR logs are always enabled. Use NIMBBL_DEBUG_LOGGING to enable unmasked DEBUG logs.
 NIMBBL_DEBUG_LOGGING=false
 NIMBBL_LOG_FILE=logs/nimbbl_debug.log
 ```
@@ -636,7 +635,7 @@ From the SDK root:
 dotnet run --project Examples/Examples.csproj
 ```
 
-You will see a menu similar to the PHP `cli.php`:
+You will see a menu:
 ```
 Select an example to run:
 1. Create Order
@@ -653,7 +652,7 @@ Select an example to run:
 0. Exit
 ```
 
-Interactive prompts mirror the PHP CLI:
+Interactive prompts:
 - **Payments > Initiate Payment**: prompts for payment mode (default `net_banking`), hints common bank codes (hdfc, icic, sbi, axis, kotak, pnb), defaults bank code to `hdfc`, asks for callback URL (default `https://example.com/callback`), and if OTP is required will prompt for OTP and complete the payment.
 - **Checkout Utilities > List Banks**: supports three flows—`order_id` only, `total_amount` + `currency` without `order_id`, and empty request body. Prints `bank_list` with `bank_name`, `code`, `health_status`, and `additional_charges` when present.
 
@@ -754,8 +753,8 @@ Edit `Nimbbl.Sdk.Rest/Nimbbl.Sdk.Rest.csproj`:
 ---
 
 **Last Updated**: 2025-01-26  
-**SDK Version**: 1.3.4  
-**Target Framework**: .NET 6.0
+**SDK Version**: 1.3.5  
+**Target Framework**: .NET 8.0
 
 ## Configuration
 
@@ -772,8 +771,7 @@ The SDK uses environment variables for configuration. You can provide them via:
 ### Optional Environment Variables
 
 - `NIMBBL_API_HOST` - API host URL (defaults to production: `https://api.nimbbl.tech`)
-- `NIMBBL_ENABLE_LOGGING` - Enable/disable logging (defaults to `true`)
-- `NIMBBL_DEBUG_LOGGING` - Enable/disable debug logging (defaults to `false`)
+- `NIMBBL_DEBUG_LOGGING` - Enable debug logging (defaults to `false`). INFO/WARNING/ERROR logs are always emitted; enabling debug logging will include unmasked raw JSON for troubleshooting.
 - `NIMBBL_LOG_FILE` - Log file path (defaults to `logs/nimbbl_debug.log`)
 - `NIMBBL_CHECKOUT_HOST` - Override checkout host (optional)
 

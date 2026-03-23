@@ -1,5 +1,5 @@
 using System.Text.Json;
-using Nimbbl.Sdk.Rest.Api;
+using Nimbbl.Sdk.Rest;
 using Nimbbl.Sdk.Rest.Exception;
 
 namespace Examples;
@@ -13,56 +13,33 @@ public static class ExceptionHandlingExamples
     {
         Helpers.PrintHeader("=== Exception Handling Examples ===");
         
-        // Generate a merchant token to use with order APIs
-        JsonElement tokenResponse;
-        try
-        {
-            tokenResponse = await api.Auth().GenerateTokenAsync();
-        }
-        catch (Exception ex)
-        {
-            Helpers.PrintError($"Unable to generate merchant token: {ex.Message}\n");
-            Helpers.PrintInfo("Please verify credentials.\n");
-            return;
-        }
-        
-        var merchantToken = tokenResponse.TryGetProperty("token", out var tokenProp) 
-            ? tokenProp.GetString() 
-            : null;
-        
-        if (string.IsNullOrWhiteSpace(merchantToken))
-        {
-            Helpers.PrintError("Error: Unable to generate merchant token. Please verify credentials.\n");
-            return;
-        }
-        
-        api.SetBearerToken(merchantToken);
+        // Merchant token is automatically generated and used for authentication
         
         // Example 1: Basic Exception Handling
         Console.WriteLine("Example 1: Basic Exception Handling");
         Console.WriteLine(new string('-', 50));
-        await BasicExceptionHandlingExample(api, merchantToken);
+        await BasicExceptionHandlingExample(api);
         
         Console.WriteLine("\n\n");
         
         // Example 2: Specific Exception Types
         Console.WriteLine("Example 2: Handling Specific Exception Types");
         Console.WriteLine(new string('-', 50));
-        await SpecificExceptionTypesExample(api, merchantToken);
+        await SpecificExceptionTypesExample(api);
         
         Console.WriteLine("\n\n");
         
         // Example 3: Exception Data Access
         Console.WriteLine("Example 3: Accessing Exception Data");
         Console.WriteLine(new string('-', 50));
-        await ExceptionDataAccessExample(api, merchantToken);
+        await ExceptionDataAccessExample(api);
         
         Console.WriteLine("\n\n");
         
         // Example 4: Best Practice - Comprehensive Error Handling
         Console.WriteLine("Example 4: Best Practice - Comprehensive Error Handling");
         Console.WriteLine(new string('-', 50));
-        await ComprehensiveErrorHandlingExample(api, merchantToken);
+        await ComprehensiveErrorHandlingExample(api);
         
         Console.WriteLine("\n");
         Console.WriteLine("=== Exception Handling Examples Complete ===");
@@ -74,7 +51,7 @@ public static class ExceptionHandlingExamples
         Console.WriteLine("  • Provide user-friendly error messages\n");
     }
 
-    private static async Task BasicExceptionHandlingExample(NimbblApi api, string token)
+    private static async Task BasicExceptionHandlingExample(NimbblApi api)
     {
         try
         {
@@ -107,7 +84,7 @@ public static class ExceptionHandlingExamples
         }
     }
 
-    private static async Task SpecificExceptionTypesExample(NimbblApi api, string token)
+    private static async Task SpecificExceptionTypesExample(NimbblApi api)
     {
         try
         {
@@ -162,7 +139,7 @@ public static class ExceptionHandlingExamples
         }
     }
 
-    private static async Task ExceptionDataAccessExample(NimbblApi api, string token)
+    private static async Task ExceptionDataAccessExample(NimbblApi api)
     {
         try
         {
@@ -195,7 +172,7 @@ public static class ExceptionHandlingExamples
         }
     }
 
-    private static async Task ComprehensiveErrorHandlingExample(NimbblApi api, string token)
+    private static async Task ComprehensiveErrorHandlingExample(NimbblApi api)
     {
         var result = await CreateOrderSafely(api, new Dictionary<string, object?>
         {
@@ -257,7 +234,7 @@ public static class ExceptionHandlingExamples
         {
             return (false, ex.Message, "nimbbl_error", ex.StatusCode > 0 ? ex.StatusCode : null);
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             return (false, "An unexpected error occurred.", "unexpected", null);
         }

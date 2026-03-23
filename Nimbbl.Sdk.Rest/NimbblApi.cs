@@ -1,0 +1,133 @@
+using System.Text.Json;
+using Nimbbl.Sdk.Rest.Common;
+using Nimbbl.Sdk.Rest.Log;
+using Nimbbl.Sdk.Rest.RestClient;
+using NimbblAuth = Nimbbl.Sdk.Rest.Auth.Auth;
+using NimbblOrders = Nimbbl.Sdk.Rest.Orders.Orders;
+using NimbblPaymentLinks = Nimbbl.Sdk.Rest.PaymentLinks.PaymentLinks;
+using NimbblTransactions = Nimbbl.Sdk.Rest.Transactions.Transactions;
+using NimbblRefunds = Nimbbl.Sdk.Rest.Refunds.Refunds;
+using NimbblAddresses = Nimbbl.Sdk.Rest.Addresses.Addresses;
+using NimbblPayments = Nimbbl.Sdk.Rest.Payments.Payments;
+using NimbblCheckoutUtilities = Nimbbl.Sdk.Rest.CheckoutUtilities.CheckoutUtilities;
+
+namespace Nimbbl.Sdk.Rest;
+
+/// <summary>
+/// Main entry point for the Nimbbl .NET SDK.
+/// Provides access to all API resources (Orders, Transactions, Payments, etc.)
+/// and handles initialization from provided parameters.
+/// </summary>
+public class NimbblApi : IDisposable
+{
+    private readonly NimbblApiClient _client;
+
+    public NimbblApi(string key, string secret, string? baseUrl = null, string? logFilePath = null, bool encryptPayload = false)
+    {
+        string url;
+        if (string.IsNullOrWhiteSpace(baseUrl))
+        {
+            url = ApiConstants.BaseUrl;
+        }
+        else
+        {
+            var trimmedUrl = baseUrl.TrimEnd('/');
+            var apiPathTrimmed = ApiConstants.ApiPath.TrimEnd('/');
+            
+            // If baseUrl doesn't end with /api, append /api/ automatically
+            // This allows users to pass just the host (e.g., https://qa3api.nimbbl.tech)
+            // and the SDK will automatically append /api/
+            if (!trimmedUrl.EndsWith(apiPathTrimmed, StringComparison.OrdinalIgnoreCase))
+            {
+                url = $"{trimmedUrl}{ApiConstants.ApiPath}";
+            }
+            else
+            {
+                // Already has /api, ensure it ends with /api/
+                url = baseUrl.EndsWith(ApiConstants.ApiPath) ? baseUrl : $"{trimmedUrl}{ApiConstants.ApiPath}";
+            }
+        }
+        
+        // Initialize Logger with default log file path (logging is always enabled)
+        var defaultLogPath = string.IsNullOrWhiteSpace(logFilePath)
+            ? Path.Combine(Directory.GetCurrentDirectory(), "logs", "nimbbl_debug.log")
+            : logFilePath;
+        
+        // Always initialize logger (INFO, WARNING, ERROR logs are always enabled)
+        Logger.GetInstance(defaultLogPath);
+        
+        _client = new NimbblApiClient(key, secret, url, encryptPayload);
+    }
+
+    /// <summary>
+    /// Initialize API instance from provided parameters.
+    /// Caller is responsible for loading .env files and passing values as parameters.
+    /// </summary>
+    /// <param name="accessKey">Nimbbl access key (required)</param>
+    /// <param name="accessSecret">Nimbbl access secret (required)</param>
+    /// <param name="apiHost">API host URL (optional, defaults to production)</param>
+    /// <param name="debugLogging">Enable debug logging (optional, defaults to false)</param>
+    /// <param name="logFilePath">Log file path (optional, defaults to logs/nimbbl_debug.log)</param>
+    /// <param name="encryptPayload">Enable encryption for request payloads (optional, defaults to false)</param>
+    public static NimbblApi Initialize(
+        string accessKey,
+        string accessSecret,
+        string? apiHost = null,
+        bool? debugLogging = null,
+        string? logFilePath = null,
+        bool encryptPayload = false)
+    {
+        // Configure debug logging (INFO, WARNING, ERROR logs are always enabled)
+        var debugLog = debugLogging ?? false;
+        
+        if (debugLog)
+        {
+            Logger.EnableDebug();
+        }
+        else
+        {
+            Logger.DisableDebug();
+        }
+        
+        // Build base URL from apiHost or use default
+        var baseUrl = string.IsNullOrWhiteSpace(apiHost)
+            ? ApiConstants.BaseUrl
+            : $"{apiHost.TrimEnd('/')}{ApiConstants.ApiPath}";
+        
+        // Create NimbblApi instance from provided parameters
+        return new NimbblApi(accessKey, accessSecret, baseUrl, logFilePath, encryptPayload);
+    }
+
+    public NimbblOrders Orders() => _client.Orders;
+    public NimbblTransactions Transactions() => _client.Transactions;
+    public NimbblRefunds Refunds() => _client.Refunds;
+    public NimbblAddresses Addresses() => _client.Addresses;
+    public NimbblPayments Payments() => _client.Payments;
+    public NimbblPaymentLinks PaymentLinks() => _client.PaymentLinks;
+    public NimbblCheckoutUtilities CheckoutUtilities() => _client.CheckoutUtilities;
+    public NimbblAuth Auth() => _client.Auth;
+
+    public void AddHeader(string key, string value) => _client.AddHeader(key, value);
+    public void SetBearerToken(string token, DateTime? expiresAtUtc = null) => _client.SetBearerToken(token, expiresAtUtc);
+
+
+    private bool _disposed = false;
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if (!_disposed)
+        {
+            if (disposing)
+            {
+                _client?.Dispose();
+            }
+            _disposed = true;
+        }
+    }
+
+    public void Dispose()
+    {
+        Dispose(disposing: true);
+    }
+}
+

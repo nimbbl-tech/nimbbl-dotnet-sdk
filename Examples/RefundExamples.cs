@@ -1,5 +1,5 @@
 using System.Text.Json;
-using Nimbbl.Sdk.Rest.Api;
+using Nimbbl.Sdk.Rest;
 using Nimbbl.Sdk.Rest.Exception;
 
 namespace Examples;
@@ -29,7 +29,7 @@ public static class RefundExamples
         var comment = Helpers.GetInput("Enter Refund Comment (optional): ", false);
         var refundRequestId = Helpers.GetInput("Enter Refund Request ID (optional, for idempotency): ", false);
         
-        var data = new Dictionary<string, object?>();
+        Dictionary<string, object?> data = [];
         if (!string.IsNullOrWhiteSpace(transactionId))
         {
             data["transaction_id"] = transactionId;
@@ -81,20 +81,7 @@ public static class RefundExamples
         
         try
         {
-            // Generate merchant token
-            var tokenResponse = await api.Auth().GenerateTokenAsync();
-            var merchantToken = tokenResponse.TryGetProperty("token", out var tokenProp) 
-                ? tokenProp.GetString() 
-                : null;
-            
-            if (string.IsNullOrWhiteSpace(merchantToken))
-            {
-                Helpers.PrintError("Failed to generate merchant token.\n");
-                return;
-            }
-            
-            api.SetBearerToken(merchantToken);
-            
+            // Merchant token is automatically generated and used for authentication
             var result = await api.Refunds().InitiateRefundAsync(data);
             
             if (result.TryGetProperty("error", out var errorProp))

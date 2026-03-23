@@ -12,9 +12,9 @@ public static class CheckoutConstants
     public const string PaymentModeEmi = "emi";
     public const string PaymentModeAll = "allpayment";
 
-    // Checkout Modes
-    public const string CheckoutModePopup = "popup";
-    public const string CheckoutModeRedirect = "redirect";
+    // Payment Experience Modes
+    public const string PaymentExperienceModePopup = "popup";
+    public const string PaymentExperienceModeRedirect = "redirect";
 
     // Checkout Option Keys
     public const string OptionKeyBankCode = "bank_code";
@@ -35,7 +35,7 @@ public static class CheckoutConstants
     public const string ConfigKeyCheckoutHost = "checkoutHost";
 
     // Default Values
-    public const string DefaultMode = CheckoutModePopup;
+    public const string DefaultPaymentExperienceMode = PaymentExperienceModePopup;
     public const string DefaultHandlerPostUrl = "handle-callback";
     public const string DefaultCallbackRoute = "payment-callback";
 }

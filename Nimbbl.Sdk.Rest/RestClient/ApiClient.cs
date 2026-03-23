@@ -19,27 +19,40 @@ internal class ApiClient : IDisposable
     private readonly HttpClient _client;
     private readonly string _key;
     private readonly string _secret;
-    private readonly string _baseUrl;
-    private readonly Action<string, string>? _logAction;
+    private readonly bool _encryptPayload;
         private readonly Dictionary<string, string> _defaultHeaders = new(StringComparer.OrdinalIgnoreCase);
         private string? _explicitBearerToken;
         private DateTime? _explicitTokenExpiryUtc;
 
     private JsonDocument? _tokenDoc;
-    private readonly AuthenticationService _authenticationService;
+    private readonly Logger _logger;
     
     private JsonElement Token => _tokenDoc?.RootElement ?? default;
     
-    // Expose config Key and Secret for Auth class to use in generate-token request
+    /// <summary>
+    /// Gets the access key for authentication
+    /// </summary>
     internal string GetConfigKey() => _key;
+    
+    /// <summary>
+    /// Gets the access secret for authentication
+    /// </summary>
     internal string GetConfigSecret() => _secret;
     
-    public ApiClient(string key, string secret, string baseUrl, Action<string, string>? logAction = null)
+    /// <summary>
+    /// Gets whether payload encryption is enabled
+    /// </summary>
+    internal bool IsEncryptPayloadEnabled() => _encryptPayload;
+    
+    public ApiClient(string key, string secret, string baseUrl, bool encryptPayload = false)
     {
         _key = key;
         _secret = secret;
-        _baseUrl = baseUrl;
-        _logAction = logAction;
+        _encryptPayload = encryptPayload;
+        _logger = Logger.GetInstance();
+        
+        // Log encryption flag status for debugging
+        _logger.DebugWithCaller($"ApiClient initialized - encryptPayload: {_encryptPayload}");
         _serializerOptions = new(JsonSerializerDefaults.Web)
         {
             AllowTrailingCommas = true,
@@ -50,65 +63,119 @@ internal class ApiClient : IDisposable
         };
         _client = new()
         {
-            BaseAddress = new(baseUrl)
+            BaseAddress = new(baseUrl),
+            Timeout = TimeSpan.FromSeconds(ApiConstants.DefaultHttpTimeoutSeconds)
         };
         // Default User-Agent: SDK name/version + runtime
         _defaultHeaders["User-Agent"] = $"{SdkConstants.SdkName}/{SdkConstants.SdkVersion} .NET/{Environment.Version}";
-        _authenticationService = new(_client, key, secret, _serializerOptions);
     }
 
-    public async Task<TResponse> GetWithAuth<TResponse>(string requestUri)
+    /// <summary>
+    /// Sends a GET request to the specified URI
+    /// Merchant token is automatically generated and used for authentication
+    /// </summary>
+    /// <param name="requestUri">Request URI</param>
+    public async Task<TResponse> Get<TResponse>(string requestUri)
     {
-        return await SendWithAuthGuardAsync<TResponse>(CreateRequest(HttpMethod.Get, requestUri));
+        return await ExecuteRequestAsync<TResponse>(CreateRequest(HttpMethod.Get, requestUri));
     }
 
-    public async Task<TResponse> GetWithAuth<TResponse>(string requestUri, Dictionary<string, object?>? queryParams)
-    {
-        var uri = BuildQueryString(requestUri, queryParams);
-        return await SendWithAuthGuardAsync<TResponse>(CreateRequest(HttpMethod.Get, uri));
-    }
-
-    public async Task<TResponse> PostWithAuth<TRequest, TResponse>(string requestUri, TRequest body)
-        where TRequest : class
-    {
-        return await SendWithAuthGuardAsync<TResponse>(CreateRequest(HttpMethod.Post, requestUri, body));
-    }
-
-    public async Task<TResponse> PatchWithAuth<TRequest, TResponse>(string requestUri, TRequest body)
-        where TRequest : class
-    {
-        return await SendWithAuthGuardAsync<TResponse>(CreateRequest(HttpMethod.Patch, requestUri, body));
-    }
-
-    public async Task<TResponse> DeleteWithAuth<TResponse>(string requestUri)
-    {
-        return await SendWithAuthGuardAsync<TResponse>(CreateRequest(HttpMethod.Delete, requestUri));
-    }
-
-    public async Task<TResponse> DeleteWithAuth<TResponse>(string requestUri, Dictionary<string, object?>? queryParams)
+    /// <summary>
+    /// Sends a GET request with query parameters
+    /// Merchant token is automatically generated and used for authentication
+    /// </summary>
+    /// <param name="requestUri">Request URI</param>
+    /// <param name="queryParams">Query parameters</param>
+    public async Task<TResponse> Get<TResponse>(string requestUri, Dictionary<string, object?>? queryParams)
     {
         var uri = BuildQueryString(requestUri, queryParams);
-        return await SendWithAuthGuardAsync<TResponse>(CreateRequest(HttpMethod.Delete, uri));
+        return await ExecuteRequestAsync<TResponse>(CreateRequest(HttpMethod.Get, uri));
     }
 
-        public void SetBearerToken(string token, DateTime? expiresAtUtc = null)
-        {
-            _explicitBearerToken = token;
-            _explicitTokenExpiryUtc = expiresAtUtc;
-        }
+    /// <summary>
+    /// Sends a POST request with a request body
+    /// Merchant token is automatically generated and used for authentication
+    /// </summary>
+    /// <param name="requestUri">Request URI</param>
+    /// <param name="body">Request body</param>
+    public async Task<TResponse> Post<TRequest, TResponse>(string requestUri, TRequest body)
+        where TRequest : class
+    {
+        return await ExecuteRequestAsync<TResponse>(CreateRequest(HttpMethod.Post, requestUri, body));
+    }
 
-        public void AddHeader(string key, string value)
+    /// <summary>
+    /// Sends a PATCH request with a request body
+    /// Merchant token is automatically generated and used for authentication
+    /// </summary>
+    /// <param name="requestUri">Request URI</param>
+    /// <param name="body">Request body</param>
+    public async Task<TResponse> Patch<TRequest, TResponse>(string requestUri, TRequest body)
+        where TRequest : class
+    {
+        return await ExecuteRequestAsync<TResponse>(CreateRequest(HttpMethod.Patch, requestUri, body));
+    }
+
+    /// <summary>
+    /// Sends a DELETE request to the specified URI
+    /// Merchant token is automatically generated and used for authentication
+    /// </summary>
+    /// <param name="requestUri">Request URI</param>
+    public async Task<TResponse> Delete<TResponse>(string requestUri)
+    {
+        return await ExecuteRequestAsync<TResponse>(CreateRequest(HttpMethod.Delete, requestUri));
+    }
+
+    /// <summary>
+    /// Sends a DELETE request with query parameters
+    /// Merchant token is automatically generated and used for authentication
+    /// </summary>
+    /// <param name="requestUri">Request URI</param>
+    /// <param name="queryParams">Query parameters</param>
+    public async Task<TResponse> Delete<TResponse>(string requestUri, Dictionary<string, object?>? queryParams)
+    {
+        var uri = BuildQueryString(requestUri, queryParams);
+        return await ExecuteRequestAsync<TResponse>(CreateRequest(HttpMethod.Delete, uri));
+    }
+
+    /// <summary>
+    /// Sets an explicit bearer token for authentication
+    /// </summary>
+    public void SetBearerToken(string token, DateTime? expiresAtUtc = null)
+    {
+        _explicitBearerToken = token;
+        _explicitTokenExpiryUtc = expiresAtUtc;
+    }
+
+    /// <summary>
+    /// Adds a default header to all requests
+    /// </summary>
+    public void AddHeader(string key, string value)
         {
             if (string.IsNullOrWhiteSpace(key)) return;
             _defaultHeaders[key] = value;
         }
 
 
-    private async Task<TResponse> SendWithAuthGuardAsync<TResponse>(HttpRequestMessage message)
+    /// <summary>
+    /// Executes an HTTP request with logging, retry logic, and error handling
+    /// Merchant token is automatically generated and used for authentication
+    /// </summary>
+    /// <param name="message">HTTP request message</param>
+    private async Task<TResponse> ExecuteRequestAsync<TResponse>(HttpRequestMessage message)
     {
-        // Store caller info from request log to reuse for response log and error logs
+        // Get caller info from request log to reuse for response log
         var callerInfo = await LogRequestAsync(message);
-        var httpResponse = await SendResilientRequestAsync(callerInfo);
+        HttpResponseMessage httpResponse;
+        try
+        {
+            httpResponse = await RetryRequestAsync(async (req, ci) => await SendRequestAsync(req, ci), message, ApiConstants.DefaultRetryCount, callerInfo);
+        }
+        catch (System.Exception ex)
+        {
+            _logger.ExceptionWithCaller("RetryRequestAsync failed", ex, callerInfo);
+            throw;
+        }
         
         // Read response body for logging (clone it first to avoid consuming)
         string? responseBody = null;
@@ -123,8 +190,7 @@ internal class ApiClient : IDisposable
         }
         catch (System.Exception ex)
         {
-            var logger = Logger.GetInstance();
-            logger.ExceptionWithCaller("Error reading response body", ex, callerInfo.Module, callerInfo.Line, callerInfo.Function);
+            _logger.ExceptionWithCaller("Error reading response body", ex, callerInfo);
             throw;
         }
         
@@ -134,21 +200,49 @@ internal class ApiClient : IDisposable
         // If HTTP status is success but body carries an error envelope, surface it
         if (httpResponse.IsSuccessStatusCode)
         {
-            ThrowIfErrorEnvelope(responseBody, httpResponse.StatusCode);
+            ThrowIfErrorEnvelope(responseBody);
         }
         
-        // Log raw JSON for debugging (before deserialization attempt)
-        if (responseBody != null)
+        // Note: Raw JSON response logging is handled by LogResponseAsync() to avoid duplication
+        // Check if response contains encrypted_response and decrypt it if needed
+        if (httpResponse.IsSuccessStatusCode && !string.IsNullOrWhiteSpace(responseBody))
         {
-            // Use Logger class for consistent format, reusing caller info from request log
-            var logger = Logger.GetInstance();
-            logger.DebugWithCaller($"Raw JSON Response (before deserialization):\n{responseBody}", callerInfo.Module, callerInfo.Line, callerInfo.Function);
-        }
-        else
-        {
-            // Use Logger class for consistent format, reusing caller info from request log
-            var logger = Logger.GetInstance();
-            logger.DebugWithCaller("Response body is NULL", callerInfo.Module, callerInfo.Line, callerInfo.Function);
+            try
+            {
+                using var responseDoc = JsonDocument.Parse(responseBody);
+                var responseRoot = responseDoc.RootElement;
+                
+                // Check if response contains encrypted_response field
+                if (responseRoot.TryGetProperty(JsonKeys.EncryptedResponse, out var encryptedResponseProp) 
+                    && encryptedResponseProp.ValueKind == JsonValueKind.String)
+                {
+                    var encryptedResponse = encryptedResponseProp.GetString();
+                    if (!string.IsNullOrWhiteSpace(encryptedResponse))
+                    {
+                        try
+                        {
+                            // Decrypt the encrypted response
+                            var encryption = new Encryption(_secret);
+                            var decryptedJson = encryption.Decrypt(encryptedResponse, true);
+                            responseBody = decryptedJson;
+                            
+                            _logger.InfoWithCaller("Successfully decrypted encrypted response", callerInfo);
+                            
+                            // Update the content with decrypted response
+                            httpResponse.Content = new StringContent(responseBody, System.Text.Encoding.UTF8, "application/json");
+                        }
+                        catch (System.Exception decryptEx)
+                        {
+                            _logger.ExceptionWithCaller($"Failed to decrypt encrypted response: {decryptEx.Message}", decryptEx, callerInfo);
+                            // Continue with original responseBody - let deserialization handle it
+                        }
+                    }
+                }
+            }
+            catch (JsonException)
+            {
+                // If JSON parsing fails, continue with original responseBody
+            }
         }
         
         // Attempt deserialization with error handling
@@ -174,45 +268,38 @@ internal class ApiClient : IDisposable
         }
         catch (JsonException ex)
         {
-            // Log the error with the raw response for debugging - ALWAYS log this
-            if (_logAction != null)
+            // Log the error with the raw response for debugging
+            try
             {
-                try
+                var errorMsg = $"Failed to deserialize response:\n{ex.Message}\nPath: {ex.Path}\nLineNumber: {ex.LineNumber}\nBytePositionInLine: {ex.BytePositionInLine}";
+                if (responseBody != null)
                 {
-                    var errorMsg = $"Failed to deserialize response:\n{ex.Message}\nPath: {ex.Path}\nLineNumber: {ex.LineNumber}\nBytePositionInLine: {ex.BytePositionInLine}";
-                    if (responseBody != null)
-                    {
-                        errorMsg += $"\n\nRaw JSON that failed:\n{responseBody}";
-                    }
-                    else
-                    {
-                        errorMsg += "\n\nResponse body was NULL";
-                    }
-                    _logAction("DESERIALIZATION_ERROR", errorMsg);
+                    errorMsg += $"\n\nRaw JSON that failed:\n{responseBody}";
                 }
-                catch
+                else
                 {
-                    // If logging fails, use Logger as fallback
-                    var logger = Logger.GetInstance();
-                    logger.Exception("Failed to log deserialization error", ex);
+                    errorMsg += "\n\nResponse body was NULL";
                 }
+                _logger.ErrorWithCaller(errorMsg, callerInfo);
+            }
+            catch
+            {
+                // If logging fails, ignore
             }
             throw;
         }
         catch (System.Exception ex)
         {
             // Catch any other exceptions during deserialization
-            if (_logAction != null && responseBody != null)
+            if (responseBody != null)
             {
                 try
                 {
-                    _logAction("DESERIALIZATION_ERROR", 
-                        $"Unexpected error during deserialization:\n{ex.GetType().Name}: {ex.Message}\n\nRaw JSON:\n{responseBody}");
+                    _logger.ErrorWithCaller($"Unexpected error during deserialization:\n{ex.GetType().Name}: {ex.Message}\n\nRaw JSON:\n{responseBody}", callerInfo);
                 }
                 catch
                 {
-                    var logger = Logger.GetInstance();
-                    logger.Exception("Failed to log deserialization error", ex);
+                    // If logging fails, ignore
                 }
             }
             throw;
@@ -220,57 +307,129 @@ internal class ApiClient : IDisposable
         
         if (response == null) throw new ApplicationException(ErrorMessages.MessageNoValueReturned);
         return response;
-
-        async Task<HttpResponseMessage> SendResilientRequestAsync((string Module, string Function, int Line) callerInfo)
-        {
-            try
-            {
-                var result = await WithRetry(SendRequestAsync, message, 1);
-                return result;
-            }
-            catch (System.Exception ex)
-            {
-                var logger = Logger.GetInstance();
-                logger.ExceptionWithCaller("SendResilientRequestAsync failed", ex, callerInfo.Module, callerInfo.Line, callerInfo.Function);
-                throw;
-            }
-        }
     }
 
-    private async Task<HttpResponseMessage> WithRetry(Func<HttpRequestMessage, Task<HttpResponseMessage>> request, HttpRequestMessage message, ushort retryCount)
+    /// <summary>
+    /// Retries a request if it fails, with automatic token refresh on auth failures
+    /// Merchant token is automatically generated and used for authentication
+    /// retryCount: Number of retry attempts (1 = 1 retry = 2 total attempts)
+    /// </summary>
+    private async Task<HttpResponseMessage> RetryRequestAsync(Func<HttpRequestMessage, (string Module, string Function, int Line)?, Task<HttpResponseMessage>> sendRequest, HttpRequestMessage message, ushort retryCount, (string Module, string Function, int Line)? callerInfo = null)
     {
         HttpResponseMessage response;
         do
         {
-            response = await request(CloneRequest(message));
+            response = await sendRequest(CloneRequest(message), callerInfo);
             if (response.IsSuccessStatusCode) 
             {
                 return response;
             }
             if (IsAuthFailure(response))
             {
+                // Clear all token caches to force regeneration on retry
                 _tokenDoc?.Dispose();
                 _tokenDoc = null;
+                _explicitBearerToken = null;
+                _explicitTokenExpiryUtc = null;
+                _logger.InfoWithCaller("Authentication failure detected. Clearing token cache for retry.", callerInfo);
             }
-        } while (retryCount-- != 0);
-        await HandleErrorResponseAsync(response);
+        } while (retryCount-- > 0);
+        await HandleErrorResponseAsync(response, callerInfo);
         return response;
     }
 
+    /// <summary>
+    /// Checks if the response indicates an authentication failure
+    /// </summary>
     private static bool IsAuthFailure(HttpResponseMessage response)
     {
         return response.StatusCode is HttpStatusCode.Forbidden or HttpStatusCode.Unauthorized;
     }
 
-    private async Task HandleErrorResponseAsync(HttpResponseMessage httpResponse)
+    /// <summary>
+    /// Handles error responses by parsing error messages and throwing appropriate exceptions
+    /// Always logs error responses with masking (unmasked only when debug is enabled)
+    /// </summary>
+    private async Task HandleErrorResponseAsync(HttpResponseMessage httpResponse, (string Module, string Function, int Line)? callerInfo = null)
     {
         var errorText = await httpResponse.Content.ReadAsStringAsync();
         
-        // Log the error response (masked) - CentralMasker is ONLY used for logging
-        var maskedErrorText = CentralMasker.MaskBody(errorText);
-        // Use Logger class for consistent format
-        var logger = Logger.GetInstance();
-        logger.Error($"HTTP {httpResponse.StatusCode}: {maskedErrorText}");
+        // Build error log message
+        var statusCode = (int)httpResponse.StatusCode;
+        var statusText = httpResponse.StatusCode.ToString();
+        var uri = httpResponse.RequestMessage?.RequestUri?.ToString() ?? "unknown";
+        var errorLogMessage = $"HTTP {statusCode} {statusText} for {uri}";
+        
+        // Log error response headers (unmasked for exceptions/errors)
+        var headersToLog = CentralMasker.GetUnmaskedHeaders(httpResponse.Headers, httpResponse.Content?.Headers);
+        if (headersToLog.Any())
+        {
+            // Use compact JSON (no indentation) for better log readability
+            var headersJson = JsonSerializer.Serialize(headersToLog, new JsonSerializerOptions 
+            { 
+                WriteIndented = false 
+            });
+            errorLogMessage += $"\nResponse Headers: {headersJson}";
+        }
+        
+        // Log the error response body (unmasked for exceptions/errors)
+        errorLogMessage += $"\nResponse Body: {errorText}";
+        
+        _logger.ErrorWithCaller(errorLogMessage, callerInfo);
+        
+        // Check if error response is encrypted and decrypt if needed
+        if (IsValidJson(errorText))
+        {
+            try
+            {
+                using var errorDoc = JsonDocument.Parse(errorText);
+                var errorRoot = errorDoc.RootElement;
+                
+                // Check if response contains encrypted_response field
+                if (errorRoot.TryGetProperty(JsonKeys.EncryptedResponse, out var encryptedResponseProp) 
+                    && encryptedResponseProp.ValueKind == JsonValueKind.String)
+                {
+                    var encryptedResponse = encryptedResponseProp.GetString();
+                    if (!string.IsNullOrWhiteSpace(encryptedResponse))
+                    {
+                        try
+                        {
+                            // Decrypt the encrypted error response
+                            var encryption = new Encryption(_secret);
+                            var decryptedJson = encryption.Decrypt(encryptedResponse, true);
+                            errorText = decryptedJson;
+                            
+                            _logger.InfoWithCaller("Successfully decrypted encrypted error response", callerInfo);
+                            
+                            // Re-parse the decrypted JSON
+                            errorDoc.Dispose();
+                            using var decryptedDoc = JsonDocument.Parse(errorText);
+                            var decryptedRoot = decryptedDoc.RootElement;
+                            
+                            // Try to get error object from decrypted response
+                            if (decryptedRoot.TryGetProperty(JsonKeys.Error, out var errorObj))
+                            {
+                                var merchantMessage = errorObj.TryGetProperty(JsonKeys.ErrorMerchantMessage, out var mm) ? mm.GetString() : null;
+                                var consumerMessage = errorObj.TryGetProperty(JsonKeys.ErrorConsumerMessage, out var cm) ? cm.GetString() : null;
+                                var errorCode = errorObj.TryGetProperty(JsonKeys.ErrorCode, out var ec) ? ec.GetString() : null;
+                                
+                                var message = merchantMessage ?? consumerMessage ?? errorCode ?? ErrorMessages.MessageApiRequestFailed;
+                                throw MapException(httpResponse.StatusCode, message, errorCode ?? ErrorCodes.ServerError);
+                            }
+                        }
+                        catch (System.Exception decryptEx)
+                        {
+                            _logger.ExceptionWithCaller($"Failed to decrypt encrypted error response: {decryptEx.Message}", decryptEx, callerInfo);
+                            // Fall through to handle as regular error
+                        }
+                    }
+                }
+            }
+            catch (JsonException)
+            {
+                // If JSON parsing fails, continue with original errorText
+            }
+        }
         
         // Use unmasked errorText for exceptions (exceptions are not logging)
         if (!IsValidJson(errorText)) throw MapException(httpResponse.StatusCode, errorText, ErrorCodes.ServerError);
@@ -281,11 +440,11 @@ internal class ApiClient : IDisposable
             var errorRoot = errorDoc.RootElement;
             
             // Try to get error object
-            if (errorRoot.TryGetProperty(ErrorMessages.ResponseKeyError, out var errorObj))
+            if (errorRoot.TryGetProperty(JsonKeys.Error, out var errorObj))
             {
-                var merchantMessage = errorObj.TryGetProperty(ErrorMessages.ErrorKeyMerchantMessage, out var mm) ? mm.GetString() : null;
-                var consumerMessage = errorObj.TryGetProperty(ErrorMessages.ErrorKeyConsumerMessage, out var cm) ? cm.GetString() : null;
-                var errorCode = errorObj.TryGetProperty(ErrorMessages.ErrorKeyErrorCode, out var ec) ? ec.GetString() : null;
+                var merchantMessage = errorObj.TryGetProperty(JsonKeys.ErrorMerchantMessage, out var mm) ? mm.GetString() : null;
+                var consumerMessage = errorObj.TryGetProperty(JsonKeys.ErrorConsumerMessage, out var cm) ? cm.GetString() : null;
+                var errorCode = errorObj.TryGetProperty(JsonKeys.ErrorCode, out var ec) ? ec.GetString() : null;
                 
                 // Use merchant message if available, otherwise consumer message, otherwise error code
                 var message = merchantMessage ?? consumerMessage ?? errorCode ?? ErrorMessages.MessageApiRequestFailed;
@@ -295,10 +454,10 @@ internal class ApiClient : IDisposable
         catch (JsonException)
         {
             // If deserialization fails, try to extract error message manually
-            if (errorText.Contains(ErrorMessages.ErrorKeyMerchantMessage))
+            if (errorText.Contains(JsonKeys.ErrorMerchantMessage))
             {
                 // Try to extract the message from JSON
-                var startIdx = errorText.IndexOf($"\"{ErrorMessages.ErrorKeyMerchantMessage}\"");
+                var startIdx = errorText.IndexOf($"\"{JsonKeys.ErrorMerchantMessage}\"");
                 if (startIdx > 0)
                 {
                     var valueStart = errorText.IndexOf('"', startIdx + 25) + 1;
@@ -321,6 +480,9 @@ internal class ApiClient : IDisposable
         }
     }
 
+    /// <summary>
+    /// Maps HTTP status codes to appropriate Nimbbl exception types
+    /// </summary>
     private static NimbblException MapException(HttpStatusCode statusCode, string message, string? errorCode)
     {
         var code = (int)statusCode;
@@ -328,15 +490,19 @@ internal class ApiClient : IDisposable
         return statusCode switch
         {
             HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden => new AuthenticationException(safeMessage, code, errorCode ?? ErrorCodes.AuthError),
-            HttpStatusCode.BadRequest or (HttpStatusCode)422 => new BadRequestException(safeMessage, code, errorCode ?? ErrorCodes.ServerError),
+            HttpStatusCode.BadRequest or (HttpStatusCode)HttpStatusCodes.UnprocessableEntity => new BadRequestException(safeMessage, code, errorCode ?? ErrorCodes.ServerError),
             HttpStatusCode.NotFound => new NotFoundException(safeMessage, code, errorCode ?? ErrorCodes.ServerError),
-            (HttpStatusCode)429 => new RateLimitException(safeMessage, code, errorCode ?? ErrorCodes.ServerError),
+            (HttpStatusCode)HttpStatusCodes.TooManyRequests => new RateLimitException(safeMessage, code, errorCode ?? ErrorCodes.ServerError),
             HttpStatusCode.InternalServerError or HttpStatusCode.BadGateway or HttpStatusCode.ServiceUnavailable or HttpStatusCode.GatewayTimeout
                 => new ServerException(safeMessage, code, errorCode ?? ErrorCodes.ServerError),
             _ => new ApiException(safeMessage, code, errorCode ?? ErrorCodes.ServerError)
         };
     }
-    private async Task<HttpResponseMessage> SendRequestAsync(HttpRequestMessage request)
+    /// <summary>
+    /// Sends an HTTP request with automatic authorization
+    /// Merchant token is automatically generated and used for authentication
+    /// </summary>
+    private async Task<HttpResponseMessage> SendRequestAsync(HttpRequestMessage request, (string Module, string Function, int Line)? callerInfo = null)
     {
         try
         {
@@ -346,71 +512,270 @@ internal class ApiClient : IDisposable
         }
         catch (System.Exception ex)
         {
-            // Capture caller info for better error logging
-            var callerInfo = Logger.GetInstance().GetCallerInfo();
-            var logger = Logger.GetInstance();
-            logger.ExceptionWithCaller("SendRequestAsync failed", ex, callerInfo.Module, callerInfo.Line, callerInfo.Function);
+            _logger.ExceptionWithCaller("SendRequestAsync failed", ex, callerInfo);
             throw;
         }
     }
 
-    private async Task LazyAuthorizeRequestAsync(HttpRequestMessage request)
+    /// <summary>
+    /// Checks if the cached token is expired or will expire within the expiration threshold
+    /// Checks both explicit bearer token and cached token document
+    /// </summary>
+    private bool IsTokenExpired()
     {
-            // Prefer explicitly set bearer token if valid (or no expiry provided)
-            if (!string.IsNullOrEmpty(_explicitBearerToken))
+        var expirationThreshold = TimeSpan.FromMinutes(ApiConstants.TokenExpirationThresholdMinutes);
+
+        // First check explicit bearer token
+        if (!string.IsNullOrEmpty(_explicitBearerToken))
+        {
+            if (_explicitTokenExpiryUtc == null)
             {
-                if (_explicitTokenExpiryUtc == null || DateTime.UtcNow < _explicitTokenExpiryUtc.Value)
+                // No expiration provided, consider valid (don't auto-regenerate)
+                return false;
+            }
+            
+            // Check if explicit token expires within the expiration threshold
+            var explicitTimeRemaining = _explicitTokenExpiryUtc.Value - DateTime.UtcNow;
+            
+            if (explicitTimeRemaining > expirationThreshold)
+            {
+                // Explicit token is still valid
+                return false;
+            }
+        }
+
+        // Check cached token document
+        if (_tokenDoc == null || Token.ValueKind != JsonValueKind.Object)
+        {
+            return true;
+        }
+
+        if (!Token.TryGetProperty(JsonKeys.ExpiresAt, out var expiresProp) || expiresProp.ValueKind != JsonValueKind.String)
+        {
+            // No expiration field, consider expired to force regeneration
+            return true;
+        }
+
+        var expiresStr = expiresProp.GetString();
+        if (string.IsNullOrEmpty(expiresStr) || !DateTime.TryParse(expiresStr, out var expiresAt))
+        {
+            // Can't parse expiration, consider expired
+            return true;
+        }
+
+        // Check if token expires within the expiration threshold
+        // If time remaining is within the threshold, consider it expired
+        var cachedTimeRemaining = expiresAt - DateTime.UtcNow;
+
+        return cachedTimeRemaining <= expirationThreshold;
+    }
+
+    /// <summary>
+    /// Ensures a valid merchant token exists, generating one if needed
+    /// This method will:
+    /// 1. Check if token exists and is not expired (beyond expiration threshold)
+    /// 2. If no token or expired, generate a new merchant token
+    /// 3. Cache the token with expiration time (UTC)
+    /// </summary>
+    private async Task<string> EnsureMerchantTokenAsync()
+    {
+        // Validate that access_key and access_secret are available
+        var accessKey = GetConfigKey();
+        var accessSecret = GetConfigSecret();
+        
+        if (string.IsNullOrWhiteSpace(accessKey))
+        {
+            throw new ApplicationException(ErrorMessages.AccessKeyMissing);
+        }
+        
+        if (string.IsNullOrWhiteSpace(accessSecret))
+        {
+            throw new ApplicationException(ErrorMessages.AccessSecretMissing);
+        }
+        
+        // First check explicit bearer token if it's not expired
+        if (!string.IsNullOrEmpty(_explicitBearerToken))
+        {
+            if (_explicitTokenExpiryUtc == null || DateTime.UtcNow < _explicitTokenExpiryUtc.Value)
+            {
+                // Check if it expires within the expiration threshold
+                if (_explicitTokenExpiryUtc == null || (_explicitTokenExpiryUtc.Value - DateTime.UtcNow) > TimeSpan.FromMinutes(ApiConstants.TokenExpirationThresholdMinutes))
                 {
-                    request.Headers.Authorization = new("Bearer", _explicitBearerToken);
-                    return;
+                    return _explicitBearerToken;
+                }
+            }
+        }
+
+        // Check if we have a valid cached token (not expired within the expiration threshold)
+        if (!IsTokenExpired() && _tokenDoc != null && Token.ValueKind == JsonValueKind.Object)
+        {
+            var tokenValue = Token.TryGetProperty(JsonKeys.Token, out var cachedTokenProp) ? cachedTokenProp.GetString() : null;
+            if (!string.IsNullOrEmpty(tokenValue))
+            {
+                return tokenValue;
+            }
+        }
+
+        // Token doesn't exist or is expired, generate a new one
+        try
+        {
+            var tokenResponse = await GenerateTokenInternalAsync();
+
+            if (tokenResponse.ValueKind != JsonValueKind.Object || 
+                !tokenResponse.TryGetProperty(JsonKeys.Token, out var tokenProp) || 
+                tokenProp.ValueKind != JsonValueKind.String)
+            {
+                throw new ApplicationException(ErrorMessages.TokenNotFoundInResponse);
+            }
+
+            var token = tokenProp.GetString();
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                throw new ApplicationException(ErrorMessages.TokenEmpty);
+            }
+
+            // Parse expires_at if available
+            DateTime? expiresAt = null;
+            if (tokenResponse.TryGetProperty(JsonKeys.ExpiresAt, out var expiresProp) && expiresProp.ValueKind == JsonValueKind.String)
+            {
+                var expiresStr = expiresProp.GetString();
+                if (!string.IsNullOrWhiteSpace(expiresStr) && DateTime.TryParse(expiresStr, out var parsedExpires))
+                {
+                    expiresAt = parsedExpires;
                 }
             }
 
-            // Check if cached token is valid (exists, has token property, and not expired)
-            bool isValid = false;
-            if (_tokenDoc != null && Token.ValueKind == JsonValueKind.Object)
+            // Cache the token with expiration time (expires_at is in UTC)
+            SetBearerToken(token, expiresAt);
+
+            // Also cache in _tokenDoc for backward compatibility
+            _tokenDoc?.Dispose();
+            // Serialize the JsonElement to string and parse it into a new JsonDocument
+            var tokenResponseJson = System.Text.Json.JsonSerializer.Serialize(tokenResponse);
+            _tokenDoc = JsonDocument.Parse(tokenResponseJson);
+
+            return token;
+        }
+        catch (System.Exception ex)
+        {
+            _logger.ExceptionWithCaller($"Failed to ensure merchant token: {ex.Message}", ex);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Internal method to generate authentication token using access_key and access_secret
+    /// This is used both by Auth.GenerateTokenAsync() and by automatic token generation
+    /// Uses ExecuteRequestAsync to ensure proper logging of request/response
+    /// </summary>
+    internal async Task<JsonElement> GenerateTokenInternalAsync()
+    {
+        var contentBody = new Dictionary<string, object?>
+        {
+            [JsonKeys.AccessKey] = _key,
+            [JsonKeys.AccessSecret] = _secret
+        };
+        
+        // Use ExecuteRequestAsync to ensure proper logging (request/response are logged with masking)
+        var response = await ExecuteRequestAsync<JsonElement>(CreateRequest(HttpMethod.Post, ApiConstants.AuthGenerateToken, contentBody));
+        
+        // Check if valid
+        if (response.TryGetProperty(JsonKeys.Valid, out var validProp) && !validProp.GetBoolean())
+        {
+            throw new ApplicationException(ErrorMessages.InvalidTokenResponse);
+        }
+        
+        // Return the response (already a JsonElement from ExecuteRequestAsync)
+        return response;
+    }
+
+    /// <summary>
+    /// Lazily authorizes the request by setting bearer token (cached or explicitly set)
+    /// Priority: 1. Explicit bearer token > 2. Auto-generated merchant token > 3. Cached token
+    /// Note: generate-token endpoint doesn't require authentication (uses access_key/access_secret in body)
+    /// </summary>
+    private async Task LazyAuthorizeRequestAsync(HttpRequestMessage request)
+    {
+        // Check if this is the generate-token endpoint - it doesn't require bearer token authentication
+        var requestUri = request.RequestUri?.ToString() ?? "";
+        if (requestUri.Contains(ApiConstants.AuthGenerateToken, StringComparison.OrdinalIgnoreCase))
+        {
+            // Generate token endpoint uses access_key/access_secret in body, no bearer token needed
+            return;
+        }
+        
+        // Priority 1: Explicitly set bearer token if valid (or no expiry provided)
+        if (!string.IsNullOrEmpty(_explicitBearerToken))
+        {
+            if (_explicitTokenExpiryUtc == null || DateTime.UtcNow < _explicitTokenExpiryUtc.Value)
             {
-                var tokenValue = Token.TryGetProperty("token", out var tokenProp) ? tokenProp.GetString() : null;
-                if (!string.IsNullOrEmpty(tokenValue))
-                {
-                    // Check expiration
-                    if (Token.TryGetProperty("expires_at", out var expiresProp))
-                    {
-                        var expiresStr = expiresProp.GetString();
-                        if (!string.IsNullOrEmpty(expiresStr) && DateTime.TryParse(expiresStr, out var expiresAt))
-                        {
-                            isValid = DateTime.UtcNow < expiresAt;
-                        }
-                        else
-                        {
-                            isValid = true; // If we can't parse, assume valid
-                        }
-                    }
-                    else
-                    {
-                        isValid = true; // No expiration field, assume valid
-                    }
-                }
+                request.Headers.Authorization = new("Bearer", _explicitBearerToken);
+                return;
             }
-            
-            if (!isValid)
+        }
+
+        // Priority 2: Auto-generate merchant token if needed (for all non-auth requests)
+        // Since nimbbl_api supports merchant tokens for all endpoints (higher_level_token_supported=True by default),
+        // we can auto-generate merchant tokens for all APIs
+        System.Exception? tokenGenerationException;
+        try
+        {
+            var merchantToken = await EnsureMerchantTokenAsync();
+            request.Headers.Authorization = new("Bearer", merchantToken);
+            return;
+        }
+        catch (System.Exception ex)
+        {
+            // Store the exception for better error reporting
+            tokenGenerationException = ex;
+            // If token generation fails, try cached token as fallback
+            _logger.WarningWithCaller($"Failed to auto-generate merchant token: {ex.Message}. Trying cached token as fallback.");
+        }
+
+        // Priority 3: Fallback to cached token if still no token
+        if (_tokenDoc != null && Token.ValueKind == JsonValueKind.Object)
+        {
+            var tokenString = Token.TryGetProperty(JsonKeys.Token, out var finalTokenProp) ? finalTokenProp.GetString() : null;
+            if (!string.IsNullOrEmpty(tokenString))
             {
-                _tokenDoc?.Dispose();
-                var tokenElement = await _authenticationService.Authenticate();
-                // Create a new JsonDocument from the element's raw text
-                _tokenDoc = JsonDocument.Parse(tokenElement.GetRawText());
+                request.Headers.Authorization = new("Bearer", tokenString);
+                return;
             }
-            
-            var tokenString = Token.TryGetProperty("token", out var token) ? token.GetString() : null;
-            if (string.IsNullOrEmpty(tokenString))
+        }
+
+        // If we still don't have a token, throw an error with details from token generation failure
+        var errorMessage = ErrorMessages.NoValidTokenAvailable;
+        if (tokenGenerationException != null)
+        {
+            // If the exception already contains a clear error message (from token generation),
+            // use it directly. Otherwise, provide generic guidance.
+            if (tokenGenerationException.Message.Contains(ErrorMessages.AccessKeyKeyword) || 
+                tokenGenerationException.Message.Contains(ErrorMessages.AccessSecretKeyword) ||
+                tokenGenerationException.Message.Contains(ErrorMessages.AuthenticationFailedKeyword) ||
+                tokenGenerationException.Message.Contains(ErrorMessages.ServiceUnavailableKeyword) ||
+                tokenGenerationException.Message.Contains(ErrorMessages.NetworkKeyword) ||
+                tokenGenerationException.Message.Contains(ErrorMessages.UnreachableKeyword))
             {
-            throw new ApplicationException(ErrorMessages.MessageTokenMissing);
+                errorMessage = tokenGenerationException.Message;
             }
-            request.Headers.Authorization = new("Bearer", tokenString);
+            else
+            {
+                errorMessage += ErrorMessages.TokenGenerationErrorPrefix + tokenGenerationException.Message;
+                errorMessage += " " + ErrorMessages.CheckCredentialsOrNetwork;
+            }
+        }
+        else
+        {
+            errorMessage += " " + ErrorMessages.CheckCredentialsOrNetwork;
+        }
+        throw new ApplicationException(errorMessage, tokenGenerationException);
     }
 
 
 
+    /// <summary>
+    /// Builds a query string from a dictionary of parameters
+    /// </summary>
     private static string BuildQueryString(string requestUri, Dictionary<string, object?>? queryParams)
     {
         if (queryParams == null || queryParams.Count == 0)
@@ -437,14 +802,19 @@ internal class ApiClient : IDisposable
         return $"{requestUri}{separator}{queryString}";
     }
 
+    /// <summary>
+    /// Creates an HTTP request message without a body
+    /// </summary>
     private HttpRequestMessage CreateRequest(HttpMethod method, string requestUri)
     {
-        var normalizedPath = NormalizeRelativePath(requestUri);
-        var message = new HttpRequestMessage(method, normalizedPath);
+        var message = new HttpRequestMessage(method, requestUri);
         ApplyDefaultHeaders(message);
         return message;
     }
 
+    /// <summary>
+    /// Creates an HTTP request message with a serialized body
+    /// </summary>
     private HttpRequestMessage CreateRequest<TRequest>(HttpMethod method, string requestUri, TRequest body) where TRequest : class
     {
         var message = CreateRequest(method, requestUri);
@@ -454,6 +824,9 @@ internal class ApiClient : IDisposable
         return message;
     }
 
+    /// <summary>
+    /// Clones an HTTP request message for retry purposes
+    /// </summary>
     private static HttpRequestMessage CloneRequest(HttpRequestMessage message)
     {
             var clone = new HttpRequestMessage(message.Method, message.RequestUri)
@@ -470,7 +843,7 @@ internal class ApiClient : IDisposable
     /// <summary>
     /// Detects error envelope in a 2xx response and throws mapped exception.
     /// </summary>
-    private void ThrowIfErrorEnvelope(string? responseBody, HttpStatusCode statusCode)
+    private static void ThrowIfErrorEnvelope(string? responseBody)
     {
         if (string.IsNullOrWhiteSpace(responseBody)) return;
         try
@@ -478,11 +851,11 @@ internal class ApiClient : IDisposable
             using var doc = JsonDocument.Parse(responseBody);
             var root = doc.RootElement;
             if (root.ValueKind != JsonValueKind.Object) return;
-            if (!root.TryGetProperty(ErrorMessages.ResponseKeyError, out var errorObj) || errorObj.ValueKind != JsonValueKind.Object) return;
+            if (!root.TryGetProperty(JsonKeys.Error, out var errorObj) || errorObj.ValueKind != JsonValueKind.Object) return;
 
-            var merchantMessage = errorObj.TryGetProperty(ErrorMessages.ErrorKeyMerchantMessage, out var mm) ? mm.GetString() : null;
-            var consumerMessage = errorObj.TryGetProperty(ErrorMessages.ErrorKeyConsumerMessage, out var cm) ? cm.GetString() : null;
-            var errorCode = errorObj.TryGetProperty(ErrorMessages.ErrorKeyErrorCode, out var ec) ? ec.GetString() : null;
+            var merchantMessage = errorObj.TryGetProperty(JsonKeys.ErrorMerchantMessage, out var mm) ? mm.GetString() : null;
+            var consumerMessage = errorObj.TryGetProperty(JsonKeys.ErrorConsumerMessage, out var cm) ? cm.GetString() : null;
+            var errorCode = errorObj.TryGetProperty(JsonKeys.ErrorCode, out var ec) ? ec.GetString() : null;
             var message = merchantMessage ?? consumerMessage ?? errorCode ?? ErrorMessages.MessageUnknownError;
 
             // Map as BadRequest when HTTP is 2xx but error payload present
@@ -494,55 +867,39 @@ internal class ApiClient : IDisposable
         }
     }
 
+
     /// <summary>
-    /// If base URL already contains a version suffix (e.g., .../v3), avoid double prefixing when requestUri also includes v3/.
+    /// Applies default headers to the request message
     /// </summary>
-    private string NormalizeRelativePath(string requestUri)
+    private void ApplyDefaultHeaders(HttpRequestMessage message)
     {
-        var trimmedBase = _client.BaseAddress?.ToString().TrimEnd('/') ?? string.Empty;
-        var trimmedReq = requestUri.TrimStart('/');
-
-        // Detect version suffix in base (e.g., /v3 or /v2)
-        var baseHasVersion = trimmedBase.EndsWith("/v3", StringComparison.OrdinalIgnoreCase)
-                             || trimmedBase.EndsWith("/v2", StringComparison.OrdinalIgnoreCase)
-                             || trimmedBase.EndsWith("/v1", StringComparison.OrdinalIgnoreCase);
-
-        if (baseHasVersion && (trimmedReq.StartsWith("v3/", StringComparison.OrdinalIgnoreCase)
-            || trimmedReq.StartsWith("v2/", StringComparison.OrdinalIgnoreCase)
-            || trimmedReq.StartsWith("v1/", StringComparison.OrdinalIgnoreCase)))
+        foreach (var kvp in _defaultHeaders)
         {
-            // Strip leading version from request to avoid double-prefix
-            var slashIndex = trimmedReq.IndexOf('/');
-            if (slashIndex >= 0 && slashIndex < trimmedReq.Length - 1)
+            // Do not override if already present
+            if (!message.Headers.Contains(kvp.Key))
             {
-                trimmedReq = trimmedReq[(slashIndex + 1)..];
-            }
-            else
-            {
-                trimmedReq = string.Empty;
+                message.Headers.TryAddWithoutValidation(kvp.Key, kvp.Value);
             }
         }
-
-        return trimmedReq;
     }
 
-        private void ApplyDefaultHeaders(HttpRequestMessage message)
-        {
-            foreach (var kvp in _defaultHeaders)
-            {
-                // Do not override if already present
-                if (!message.Headers.Contains(kvp.Key))
-                {
-                    message.Headers.TryAddWithoutValidation(kvp.Key, kvp.Value);
-                }
-            }
-        }
-
+    /// <summary>
+    /// Logs the HTTP request details and returns caller info for reuse in response logs
+    /// Only logs when debug mode is enabled
+    /// </summary>
     private async Task<(string Module, string Function, int Line)> LogRequestAsync(HttpRequestMessage request)
     {
-        var defaultCaller = ("unknown", "-", 0);
         try
         {
+            // Get caller info once to reuse for response logs
+            var callerInfo = Logger.GetCaller();
+            
+            // Only log when debug mode is enabled
+            if (!Logger.IsDebugEnabled())
+            {
+                return callerInfo;
+            }
+            
             // Get full URL (absolute URI)
             var uri = request.RequestUri?.IsAbsoluteUri == true 
                 ? request.RequestUri.ToString() 
@@ -551,22 +908,17 @@ internal class ApiClient : IDisposable
                     : request.RequestUri?.ToString() ?? "unknown");
             var method = request.Method.ToString();
             
-            // Use Logger class for logging
-            var logger = Logger.GetInstance();
-            
-            // Get caller info before logging (to reuse for response log)
-            var callerInfo = logger.GetCallerInfo();
-            
             // Build log message with full URL
             var logMessage = $"{method} {uri}";
             
-            // Log request headers (with masking for sensitive values)
-            var maskedHeaders = CentralMasker.MaskHeaders(request.Headers, request.Content?.Headers);
-            if (maskedHeaders.Any())
+            // Log request headers (masked for security)
+            var headersToLog = CentralMasker.MaskHeaders(request.Headers, request.Content?.Headers);
+            if (headersToLog.Any())
             {
-                var headersJson = System.Text.Json.JsonSerializer.Serialize(maskedHeaders, new JsonSerializerOptions 
+                // Use compact JSON (no indentation) for better log readability
+                var headersJson = JsonSerializer.Serialize(headersToLog, new JsonSerializerOptions 
                 { 
-                    WriteIndented = true 
+                    WriteIndented = false 
                 });
                 logMessage += $"\nRequest Headers: {headersJson}";
             }
@@ -577,35 +929,53 @@ internal class ApiClient : IDisposable
             {
                 // Read body (for StringContent, this is safe to read multiple times)
                 requestBody = await request.Content.ReadAsStringAsync();
-                var maskedBody = CentralMasker.MaskBody(requestBody);
-                logMessage += $"\nRequest Body: {maskedBody}";
+                var bodyToLog = CentralMasker.MaskBody(requestBody);
+                logMessage += $"\nRequest Body: {bodyToLog}";
                 
                 // Recreate content from the string so it can be read again for the actual HTTP request
                 // This is safe for StringContent and ensures the stream isn't consumed
                 request.Content = new StringContent(requestBody, System.Text.Encoding.UTF8, "application/json");
             }
             
-            // Use Logger.Info for logging
-            logger.Info(logMessage);
+            // Use Logger.InfoWithCaller for logging with caller info
+            _logger.InfoWithCaller(logMessage, callerInfo);
+            
+            // Log raw request body for debugging (unmasked)
+            if (requestBody != null)
+            {
+                _logger.DebugWithCaller($"Raw JSON Request (before sending):\n{requestBody}", callerInfo);
+            }
+            else
+            {
+                _logger.DebugWithCaller("Request body is NULL", callerInfo);
+            }
             
             return callerInfo;
         }
         catch (System.Exception ex)
         {
             // Log the exception using Logger
-            var logger = Logger.GetInstance();
-            logger.Exception("LogRequestAsync failed", ex);
-            return defaultCaller;
+            _logger.ExceptionWithCaller("LogRequestAsync failed", ex);
+            return ("unknown", "-", 0);
         }
     }
 
 
 
-    private async Task LogResponseAsync(HttpResponseMessage response, string? responseBody = null, (string Module, string Function, int Line)? callerInfo = null)
+    /// <summary>
+    /// Logs the HTTP response details
+    /// Only logs when debug mode is enabled
+    /// </summary>
+    private static async Task LogResponseAsync(HttpResponseMessage response, string? responseBody = null, (string Module, string Function, int Line)? callerInfo = null)
     {
         try
         {
-            // Use Logger class for logging
+            // Only log when debug mode is enabled
+            if (!Logger.IsDebugEnabled())
+            {
+                return;
+            }
+            
             var logger = Logger.GetInstance();
             var statusCode = (int)response.StatusCode;
             var statusText = response.StatusCode.ToString();
@@ -614,30 +984,50 @@ internal class ApiClient : IDisposable
             // Build log message
             var logMessage = $"{statusCode} {statusText} for {uri}";
             
-            // Log response body (use provided body or read it)
+            // Log response headers (masked for security)
+            var headersToLog = CentralMasker.MaskHeaders(response.Headers, response.Content?.Headers);
+            if (headersToLog.Any())
+            {
+                // Use compact JSON (no indentation) for better log readability
+                var headersJson = JsonSerializer.Serialize(headersToLog, new JsonSerializerOptions 
+                { 
+                    WriteIndented = false 
+                });
+                logMessage += $"\nResponse Headers: {headersJson}";
+            }
+            
+            // Log response body (masked for security)
             if (responseBody != null)
             {
-                logMessage += $"\nResponse Body: {CentralMasker.MaskBody(responseBody)}";
+                var bodyToLog = CentralMasker.MaskBody(responseBody);
+                logMessage += $"\nResponse Body: {bodyToLog}";
             }
             else if (response.Content != null)
             {
                 var body = await response.Content.ReadAsStringAsync();
-                logMessage += $"\nResponse Body: {CentralMasker.MaskBody(body)}";
+                var bodyToLog = CentralMasker.MaskBody(body);
+                logMessage += $"\nResponse Body: {bodyToLog}";
             }
             
-            // Use Logger.Info with caller info from request log
-            if (callerInfo.HasValue)
+            // Use Logger.Info with caller info from request log (or get fresh if not provided)
+            logger.InfoWithCaller(logMessage, callerInfo);
+            
+            // Log raw response body for debugging (unmasked)
+            var rawBody = responseBody ?? (response.Content != null ? await response.Content.ReadAsStringAsync() : null);
+            if (rawBody != null)
             {
-                logger.InfoWithCaller(logMessage, callerInfo.Value.Module, callerInfo.Value.Line, callerInfo.Value.Function);
+                logger.DebugWithCaller($"Raw JSON Response (before deserialization):\n{rawBody}", callerInfo);
             }
             else
             {
-                logger.Info(logMessage);
+                logger.DebugWithCaller("Response body is NULL", callerInfo);
             }
         }
-        catch
+        catch (System.Exception ex)
         {
-            // Silently fail logging to not break the API call
+            // Log the exception but don't throw to avoid breaking the API call
+            var logger = Logger.GetInstance();
+            logger.ExceptionWithCaller("LogResponseAsync failed", ex, callerInfo);
         }
     }
 
@@ -659,6 +1049,5 @@ internal class ApiClient : IDisposable
     public void Dispose()
     {
         Dispose(disposing: true);
-        GC.SuppressFinalize(this);
     }
 }

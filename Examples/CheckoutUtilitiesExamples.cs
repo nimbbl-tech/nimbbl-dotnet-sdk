@@ -1,5 +1,5 @@
 using System.Text.Json;
-using Nimbbl.Sdk.Rest.Api;
+using Nimbbl.Sdk.Rest;
 using Nimbbl.Sdk.Rest.Exception;
 using Nimbbl.Sdk.Rest.Common;
 
@@ -56,15 +56,7 @@ public static class CheckoutUtilitiesExamples
     {
         try
         {
-            var token = Helpers.GetInput("Enter Order Token: ", false);
-            if (string.IsNullOrWhiteSpace(token))
-            {
-                Helpers.PrintError("Order Token is required.\n");
-                return;
-            }
-            
-            api.SetBearerToken(token);
-            
+            // Merchant token is automatically generated and used for authentication
             var orderId = Helpers.GetInput("Enter Order ID: ");
             if (string.IsNullOrWhiteSpace(orderId))
             {
@@ -72,7 +64,28 @@ public static class CheckoutUtilitiesExamples
                 return;
             }
             
-            var data = new Dictionary<string, object?> { ["order_id"] = orderId };
+            Dictionary<string, object?> data = [];
+            data["order_id"] = orderId;
+            
+            // Optional: OS type (e.g., "android", "ios")
+            var os = Helpers.GetInput("Enter OS (optional, e.g., android/ios): ", false);
+            if (!string.IsNullOrWhiteSpace(os))
+            {
+                data["os"] = os;
+            }
+            
+            // Optional: UPI app package names
+            var upiApps = Helpers.GetInput("Enter UPI app package names (comma-separated, optional): ", false);
+            if (!string.IsNullOrWhiteSpace(upiApps))
+            {
+                var packageNames = upiApps.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                    .Where(p => !string.IsNullOrWhiteSpace(p))
+                    .ToArray();
+                if (packageNames.Length > 0)
+                {
+                    data["upi_app_package_names"] = packageNames;
+                }
+            }
             
             var result = await api.CheckoutUtilities().ListPaymentModesAsync(data);
             
@@ -96,15 +109,7 @@ public static class CheckoutUtilitiesExamples
     {
         try
         {
-            var token = Helpers.GetInput("Enter Order Token: ", false);
-            if (string.IsNullOrWhiteSpace(token))
-            {
-                Helpers.PrintError("Order Token is required.\n");
-                return;
-            }
-            
-            api.SetBearerToken(token);
-            
+            // Merchant token is automatically generated and used for authentication
             var orderId = Helpers.GetInput("Enter Order ID: ");
             if (string.IsNullOrWhiteSpace(orderId))
             {
@@ -136,15 +141,7 @@ public static class CheckoutUtilitiesExamples
     {
         try
         {
-            var token = Helpers.GetInput("Enter Order Token: ", false);
-            if (string.IsNullOrWhiteSpace(token))
-            {
-                Helpers.PrintError("Order Token is required.\n");
-                return;
-            }
-            
-            api.SetBearerToken(token);
-            
+            // Merchant token is automatically generated and used for authentication
             var orderId = Helpers.GetInput("Enter Order ID: ");
             if (string.IsNullOrWhiteSpace(orderId))
             {
@@ -176,15 +173,7 @@ public static class CheckoutUtilitiesExamples
     {
         try
         {
-            var token = Helpers.GetInput("Enter Order Token: ", false);
-            if (string.IsNullOrWhiteSpace(token))
-            {
-                Helpers.PrintError("Order Token is required.\n");
-                return;
-            }
-            
-            api.SetBearerToken(token);
-            
+            // Merchant token is automatically generated and used for authentication
             var orderId = Helpers.GetInput("Enter Order ID: ");
             if (string.IsNullOrWhiteSpace(orderId))
             {
@@ -216,15 +205,7 @@ public static class CheckoutUtilitiesExamples
     {
         try
         {
-            var token = Helpers.GetInput("Enter Order Token: ", false);
-            if (string.IsNullOrWhiteSpace(token))
-            {
-                Helpers.PrintError("Order Token is required.\n");
-                return;
-            }
-            
-            api.SetBearerToken(token);
-            
+            // Merchant token is automatically generated and used for authentication
             var orderId = Helpers.GetInput("Enter Order ID: ");
             if (string.IsNullOrWhiteSpace(orderId))
             {
@@ -259,7 +240,7 @@ public static class CheckoutUtilitiesExamples
                 if (!string.IsNullOrWhiteSpace(cardInputType))
                 {
                     data["card_input_type"] = cardInputType;
-                    var card = new Dictionary<string, object?>();
+                    Dictionary<string, object?> card = [];
                     
                     if (cardInputType == "card_pan")
                     {
@@ -301,7 +282,6 @@ public static class CheckoutUtilitiesExamples
             else if (paymentModeCode == CheckoutConstants.PaymentModeNetBanking)
             {
                 Helpers.PrintInfo("Bank Code is required for net_banking payment mode.\n");
-                Console.WriteLine("   Common bank codes: HDFC, ICICI, SBI, AXIS, KOTAK, etc.\n");
                 var bankCode = Helpers.GetInput("Enter Bank Code (default: HDFC): ", false) ?? "HDFC";
                 data[CheckoutConstants.OptionKeyBankCode] = bankCode;
             }
@@ -344,15 +324,7 @@ public static class CheckoutUtilitiesExamples
     {
         try
         {
-            var token = Helpers.GetInput("Enter Order Token: ", false);
-            if (string.IsNullOrWhiteSpace(token))
-            {
-                Helpers.PrintError("Order Token is required.\n");
-                return;
-            }
-            
-            api.SetBearerToken(token);
-            
+            // Merchant token is automatically generated and used for authentication
             var cardBin = Helpers.GetInput("Enter Card BIN (first 6 digits): ");
             if (string.IsNullOrWhiteSpace(cardBin))
             {
@@ -389,15 +361,7 @@ public static class CheckoutUtilitiesExamples
     {
         try
         {
-            var token = Helpers.GetInput("Enter Order Token: ", false);
-            if (string.IsNullOrWhiteSpace(token))
-            {
-                Helpers.PrintError("Order Token is required.\n");
-                return;
-            }
-            
-            api.SetBearerToken(token);
-            
+            // Merchant token is automatically generated and used for authentication
             Helpers.PrintInfo("This API requires RSA-encrypted card details.\n");
             Helpers.PrintInfo("You need to:\n");
             Helpers.PrintInfo("1. Get the Nimbbl public key for encryption (contact help@nimbbl.biz)\n");
@@ -424,7 +388,7 @@ public static class CheckoutUtilitiesExamples
             var includeDevice = Helpers.GetInput("Include device details? (y/N): ", false);
             if (includeDevice?.ToLower() == "y")
             {
-                var device = new Dictionary<string, object?>();
+                Dictionary<string, object?> device = [];
                 var acceptHeader = Helpers.GetInput("Accept Header (optional): ", false);
                 if (!string.IsNullOrWhiteSpace(acceptHeader)) device["accept_header"] = acceptHeader;
                 
@@ -515,15 +479,7 @@ public static class CheckoutUtilitiesExamples
     {
         try
         {
-            var token = Helpers.GetInput("Enter Order Token: ", false);
-            if (string.IsNullOrWhiteSpace(token))
-            {
-                Helpers.PrintError("Order Token is required.\n");
-                return;
-            }
-            
-            api.SetBearerToken(token);
-            
+            // Merchant token is automatically generated and used for authentication
             var upiId = Helpers.GetInput("Enter UPI ID (e.g., user@paytm): ");
             if (string.IsNullOrWhiteSpace(upiId))
             {
@@ -555,15 +511,7 @@ public static class CheckoutUtilitiesExamples
     {
         try
         {
-            var token = Helpers.GetInput("Enter Order Token: ", false);
-            if (string.IsNullOrWhiteSpace(token))
-            {
-                Helpers.PrintError("Order Token is required.\n");
-                return;
-            }
-            
-            api.SetBearerToken(token);
-            
+            // Merchant token is automatically generated and used for authentication
             var platform = Helpers.GetInput("Enter Platform (ios/android): ");
             if (string.IsNullOrWhiteSpace(platform))
             {

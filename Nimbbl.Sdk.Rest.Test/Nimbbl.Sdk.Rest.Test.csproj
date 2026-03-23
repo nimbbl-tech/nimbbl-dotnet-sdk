@@ -16,6 +16,15 @@
             <PrivateAssets>all</PrivateAssets>
         </PackageReference>
     </ItemGroup>
+
+    <!-- Use published SDK from NuGet (default) -->
+    <!--
+    <ItemGroup>
+        <PackageReference Include="Nimbbl.Sdk.Rest" Version="1.3.5" />
+    </ItemGroup>
+    -->
+
+    <!-- Use local SDK source (uncomment to use local SDK instead of published package) -->
     <ItemGroup>
         <ProjectReference Include="..\Nimbbl.Sdk.Rest\Nimbbl.Sdk.Rest.csproj" />
     </ItemGroup>

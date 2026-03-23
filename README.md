@@ -53,14 +53,11 @@ The SDK uses environment variables for configuration. You can provide them via:
 
 ### Optional Environment Variables
 
-- `NIMBBL_API_HOST` - API host URL (defaults to production: `https://api.nimbbl.tech`)
-  - Production: `https://api.nimbbl.tech`
-  - UAT: `https://apipp.nimbbl.tech`
-  - QA2: `https://qa2api.nimbbl.tech`
-- `NIMBBL_ENABLE_LOGGING` - Enable/disable logging (defaults to `true`)
-- `NIMBBL_DEBUG_LOGGING` - Enable/disable debug logging (defaults to `false`)
+- `NIMBBL_DEBUG_LOGGING` - Enable/disable debug logging (defaults to `false`). Note: INFO/WARNING/ERROR logs are always emitted; debug logs show unmasked raw payloads.
 - `NIMBBL_LOG_FILE` - Log file path (defaults to `logs/nimbbl_debug.log`)
 - `NIMBBL_CHECKOUT_HOST` - Override checkout host (optional)
+
+**Note:** The SDK uses the production API host (`https://api.nimbbl.tech`) by default. For testing environments, you can configure a custom base URL when initializing the SDK.
 
 ## Quick Start
 
@@ -78,9 +75,7 @@ EnvLoader.LoadEnvFile();
 var api = NimbblApi.Initialize(
     accessKey: Environment.GetEnvironmentVariable("NIMBBL_ACCESS_KEY")!,
     accessSecret: Environment.GetEnvironmentVariable("NIMBBL_ACCESS_SECRET")!,
-    apiHost: Environment.GetEnvironmentVariable("NIMBBL_API_HOST"),
-    enableLogging: true,
-    debugLogging: false,
+    debugLogging: false,   // Set to true to enable debug logging (unmasked raw JSON)
     logFilePath: "logs/nimbbl_debug.log"
 );
 
@@ -94,7 +89,7 @@ api.SetBearerToken("your_order_or_merchant_token", expiresAtUtc: DateTime.UtcNow
 var order = await api.Orders().CreateOrderAsync(new Dictionary<string, object?>
 {
     ["invoice_id"] = "INV-12345",
-    ["total_amount"] = 400.00m,
+    ["total_amount"] = 400.0,  // Amount as double (not decimal)
     ["currency"] = "INR"
 });
 
@@ -123,9 +118,7 @@ using Nimbbl.Sdk.Rest.Extensions;
 builder.Services.AddNimbbl(
     accessKey: Environment.GetEnvironmentVariable("NIMBBL_ACCESS_KEY")!,
     accessSecret: Environment.GetEnvironmentVariable("NIMBBL_ACCESS_SECRET")!,
-    apiHost: Environment.GetEnvironmentVariable("NIMBBL_API_HOST"),
-    enableLogging: true,
-    debugLogging: false,
+    debugLogging: false, // Set to true to enable debug logging (unmasked raw JSON)
     logFilePath: "logs/nimbbl_debug.log"
 );
 
@@ -144,40 +137,12 @@ public class MyController : ControllerBase
         var order = await _api.Orders().CreateOrderAsync(new Dictionary<string, object?>
         {
             ["invoice_id"] = "INV-12345",
-            ["total_amount"] = 400.00m,
+            ["total_amount"] = 400.0,  // Amount as double (not decimal)
             ["currency"] = "INR"
         });
         return Ok(order);
     }
 }
-```
-
-### Option 3: Direct NimbblClient Usage
-
-```c#
-using Nimbbl.Sdk.Rest;
-
-var client = new NimbblClient(
-    key: "your_access_key",
-    secret: "your_access_secret",
-    baseUrl: "https://api.nimbbl.tech/api/"
-);
-
-var order = await client.Orders.CreateOrderAsync(new Dictionary<string, object?>
-{
-    ["invoice_id"] = "INV-12345",
-    ["total_amount"] = 400.00m,
-    ["currency"] = "INR"
-});
-```
-
-```c#
-var order = await client.Orders.CreateOrderAsync(new Dictionary<string, object?>
-{
-    ["invoice_id"] = "INV-12345",
-    ["total_amount"] = 400.00m,
-    ["currency"] = "INR"
-});
 ```
 
 ## API Usage Examples
@@ -186,25 +151,25 @@ var order = await client.Orders.CreateOrderAsync(new Dictionary<string, object?>
 
 ```c#
 // Create order
-var order = await client.Orders.CreateOrderAsync(new Dictionary<string, object?>
+var order = await api.Orders().CreateOrderAsync(new Dictionary<string, object?>
 {
     ["invoice_id"] = "INV-12345",
-    ["total_amount"] = 400.00m,
+    ["total_amount"] = 400.0,  // Amount as double (not decimal)
     ["currency"] = "INR"
 });
 
 // Get order by ID
-var order = await client.Orders.GetOrderByIdAsync("order_id");
+var order = await api.Orders().GetOrderByIdAsync("order_id");
 
 // Get order by invoice ID
-var order = await client.Orders.GetOrderByInvoiceIdAsync("invoice_id");
+var order = await api.Orders().GetOrderByInvoiceIdAsync("invoice_id");
 ```
 
 ### Payments API (dictionary payloads)
 
 ```c#
 // Initiate payment
-var payment = await client.Payments.InitiatePaymentAsync(new Dictionary<string, object?>
+var payment = await api.Payments().InitiatePaymentAsync(new Dictionary<string, object?>
 {
     ["order_id"] = "order_id",
     ["payment_mode"] = "netbanking",
@@ -212,14 +177,14 @@ var payment = await client.Payments.InitiatePaymentAsync(new Dictionary<string, 
 });
 
 // Complete payment
-var result = await client.Payments.CompletePaymentAsync(new Dictionary<string, object?>
+var result = await api.Payments().CompletePaymentAsync(new Dictionary<string, object?>
 {
     ["order_id"] = "order_id",
     ["otp"] = "123456"
 });
 
 // Resend OTP
-var otpResult = await client.Payments.ResendPaymentOtpAsync(new Dictionary<string, object?>
+var otpResult = await api.Payments().ResendPaymentOtpAsync(new Dictionary<string, object?>
 {
     ["order_id"] = "order_id"
 });
@@ -229,23 +194,23 @@ var otpResult = await client.Payments.ResendPaymentOtpAsync(new Dictionary<strin
 
 ```c#
 // Create payment link
-var paymentLink = await client.PaymentLinks.CreatePaymentLinkAsync(new Dictionary<string, object?>
+var paymentLink = await api.PaymentLinks().CreatePaymentLinkAsync(new Dictionary<string, object?>
 {
     ["invoice_id"] = "INV-123",
-    ["total_amount"] = 1000m,
+    ["total_amount"] = 1000.0,  // Amount as double (not decimal)
     ["currency"] = "INR",
     ["description"] = "Payment for order",
     ["expires_at"] = DateTime.Now.AddDays(7)
 });
 
 // Update payment link
-var updated = await client.PaymentLinks.UpdatePaymentLinkAsync(new Dictionary<string, object?>
+var updated = await api.PaymentLinks().UpdatePaymentLinkAsync(new Dictionary<string, object?>
 {
-    ["total_amount"] = 1500m
+    ["total_amount"] = 1500.0  // Amount as double (not decimal)
 });
 
 // Enquiry
-var enquiry = await client.PaymentLinks.EnquiryPaymentLinkAsync(new Dictionary<string, object?>
+var enquiry = await api.PaymentLinks().EnquiryPaymentLinkAsync(new Dictionary<string, object?>
 {
     ["payment_link_id"] = "link_id"
 });
@@ -255,15 +220,15 @@ var enquiry = await client.PaymentLinks.EnquiryPaymentLinkAsync(new Dictionary<s
 
 ```c#
 // List addresses
-var addresses = await client.Addresses.ListAddressesAsync(new Dictionary<string, object?>
+var addresses = await api.Addresses().ListAddressesAsync(new Dictionary<string, object?>
 {
     ["user_id"] = "user_id",
-    ["amount"] = 1000m,
+    ["amount"] = 1000.0,  // Amount as double (not decimal)
     ["currency"] = "INR"
 });
 
 // Create address
-var address = await client.Addresses.CreateAddressAsync(new Dictionary<string, object?>
+var address = await api.Addresses().CreateAddressAsync(new Dictionary<string, object?>
 {
     ["user_id"] = "user_id",
     ["address1"] = "123 Main St",
@@ -274,29 +239,29 @@ var address = await client.Addresses.CreateAddressAsync(new Dictionary<string, o
 });
 
 // Update address
-var updated = await client.Addresses.UpdateAddressAsync("address_id", new Dictionary<string, object?>
+var updated = await api.Addresses().UpdateAddressAsync("address_id", new Dictionary<string, object?>
 {
     ["city"] = "Delhi"
 });
 
 // Delete address
-var result = await client.Addresses.DeleteAddressAsync("address_id");
+var result = await api.Addresses().DeleteAddressAsync("address_id");
 ```
 
 ### Refunds API (dictionary payloads)
 
 ```c#
 // Initiate refund (full)
-var refund = await client.Refunds.InitiateRefundAsync(new Dictionary<string, object?>
+var refund = await api.Refunds().InitiateRefundAsync(new Dictionary<string, object?>
 {
     ["transaction_id"] = "transaction_id"
 });
 
 // Initiate partial refund
-var partialRefund = await client.Refunds.InitiateRefundAsync(new Dictionary<string, object?>
+var partialRefund = await api.Refunds().InitiateRefundAsync(new Dictionary<string, object?>
 {
     ["transaction_id"] = "transaction_id",
-    ["refund_amount"] = 50.00m,
+    ["refund_amount"] = 50.0,  // Amount as double (not decimal)
     ["comment"] = "Partial refund"
 });
 ```
@@ -305,67 +270,75 @@ var partialRefund = await client.Refunds.InitiateRefundAsync(new Dictionary<stri
 
 ```c#
 // Enquiry by transaction ID
-var txn = await client.Transactions().TransactionEnquiryAsync(new Dictionary<string, object?> { ["transaction_id"] = "transaction_id" });
-// Enquiry by order ID
-var txnByOrder = await client.Transactions.GetByOrderIdAsync("order_id");
+var txn = await api.Transactions().TransactionEnquiryAsync(new Dictionary<string, object?> { ["transaction_id"] = "transaction_id" });
+// Enquiry by order ID or invoice_id
+var txnByOrder = await api.Transactions().TransactionEnquiryAsync(new Dictionary<string, object?> { ["order_id"] = "order_id" });
 ```
 
 ### Checkout Utilities API (dictionary payloads)
 
 ```c#
 // List payment modes
-var modes = await client.CheckoutUtilities.ListPaymentModesAsync(new Dictionary<string, object?>
+var modes = await api.CheckoutUtilities().ListPaymentModesAsync(new Dictionary<string, object?>
 {
     ["order_id"] = "order_id"
 });
 
 // List banks
-var banks = await client.CheckoutUtilities.ListBanksAsync(new Dictionary<string, object?>
+var banks = await api.CheckoutUtilities().ListBanksAsync(new Dictionary<string, object?>
 {
     ["order_id"] = "order_id",
-    ["amount"] = 1000m,
+    ["amount"] = 1000.0,  // Amount as double (not decimal)
     ["currency"] = "INR"
 });
 
 // Validate UPI VPA
-var vpa = await client.CheckoutUtilities.ValidateUpiVpaAsync(new Dictionary<string, object?>
+var vpa = await api.CheckoutUtilities().ValidateUpiVpaAsync(new Dictionary<string, object?>
 {
     ["vpa"] = "user@paytm"
 });
 
 // Note: Pass the order token via SetBearerToken if not using automatic auth
-client.SetBearerToken("order_token_here", expiresAtUtc: DateTime.UtcNow.AddMinutes(20));
+api.SetBearerToken("order_token_here", expiresAtUtc: DateTime.UtcNow.AddMinutes(20));
 ```
 
 ### Webhook
-
-Not exposed in this .NET build (PHP removed Users/Webhook). Use `Common/NimbblUtils` for signature verification if needed.
+Webhooks are supported. Use `Common/SignatureVerifier` for signature verification:
+- `SignatureVerifier.VerifySignature(JsonElement attributes, string secret)` — verifies parsed JSON attributes.
+ - `SignatureVerifier.VerifyWebhookSignature(string payload, string secret, out JsonElement parsed)` — parses and verifies raw webhook payload.
 
 ## Project Structure
 
 ```text
 Nimbbl.Sdk.Rest/
-├── Orders/              # Orders API
-├── Payments/            # Payments API
-├── PaymentLinks/        # Payment Links API
-├── Addresses/           # Addresses API
-├── Refunds/             # Refunds API
-├── TransactionStatus/   # (removed; use Transactions)
-├── CheckoutUtilities/    # Checkout Utilities API
-├── Transactions/         # Transactions API
-└── RestClient/          # HTTP client implementation
+├── Api/                  # SDK entrypoint (NimbblApi)
+├── Common/               # Shared helpers, constants, signature verifier, encryption
+├── Exception/            # Typed SDK exceptions (NimbblException, NotFoundException, etc.)
+├── Extensions/           # DI extensions (AddNimbbl)
+├── Log/                  # Logger implementation and helpers
+├── RestClient/           # HTTP client and low-level Rest primitives (ApiClient, NimbblClient)
+├── Services/             # High-level API services
+│   ├── Orders.cs
+│   ├── Payments.cs
+│   ├── PaymentLinks.cs
+│   ├── Addresses.cs
+│   ├── Refunds.cs
+│   ├── CheckoutUtilities.cs
+│   └── Transactions.cs
+└── Nimbbl.Sdk.Rest.csproj
 ```
 
 ## Documentation
 
 - [BUILD_RUN_PACKAGE.md](BUILD_RUN_PACKAGE.md) - Build, run, and package guide
+- [TESTING_GUIDE.md](TESTING_GUIDE.md) - **Testing guide for testers** - How to test examples and sample app locally
 - [MerchantSampleApp/README.md](MerchantSampleApp/README.md) - Sample application guide
 - [Examples/README.md](Examples/README.md) - Examples and CLI menu guide
 - [Nimbbl API Documentation](https://nimbbl.biz/docs/api-reference/introduction/) - Official API reference
 
 ## Version
 
-Current Version: 1.3.4
+Current Version: 1.3.5
 
 ## License
 

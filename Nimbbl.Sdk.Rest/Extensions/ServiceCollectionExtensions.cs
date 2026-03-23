@@ -1,5 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
-using Nimbbl.Sdk.Rest.Api;
+using Nimbbl.Sdk.Rest;
 
 namespace Nimbbl.Sdk.Rest.Extensions;
 
@@ -16,30 +16,29 @@ public static class ServiceCollectionExtensions
     /// <param name="accessKey">Nimbbl access key (required)</param>
     /// <param name="accessSecret">Nimbbl access secret (required)</param>
     /// <param name="apiHost">API host URL (optional, defaults to production)</param>
-    /// <param name="enableLogging">Enable SDK logging (optional, defaults to true)</param>
-    /// <param name="debugLogging">Enable debug logging (optional, defaults to false)</param>
-    /// <param name="logFilePath">Log file path (optional)</param>
-    /// <param name="logAction">Custom log action (optional)</param>
+    /// <param name="debugLogging">Enable debug logging (optional, defaults to false). Note: INFO, WARNING, ERROR logs are always enabled.</param>
+    /// <param name="logFilePath">Log file path (optional, defaults to logs/nimbbl_debug.log)</param>
+    /// <param name="encryptPayload">Enable encryption for request payloads (optional, defaults to false)</param>
     /// <returns>The service collection for chaining</returns>
     public static IServiceCollection AddNimbbl(
         this IServiceCollection services,
         string accessKey,
         string accessSecret,
         string? apiHost = null,
-        bool? enableLogging = null,
         bool? debugLogging = null,
         string? logFilePath = null,
-        Action<string, string>? logAction = null)
+        bool encryptPayload = false)
     {
         // Initialize NimbblApi from provided parameters
+        // Note: Logging (INFO, WARNING, ERROR) is always enabled by default
+        // Only DEBUG logs are controlled by debugLogging parameter
         var api = NimbblApi.Initialize(
             accessKey: accessKey,
             accessSecret: accessSecret,
             apiHost: apiHost,
-            enableLogging: enableLogging,
             debugLogging: debugLogging,
             logFilePath: logFilePath,
-            logAction: logAction);
+            encryptPayload: encryptPayload);
         
         // Register NimbblApi as singleton
         services.AddSingleton(api);

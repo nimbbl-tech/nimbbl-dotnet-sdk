@@ -1,5 +1,5 @@
 using System.Text.Json;
-using Nimbbl.Sdk.Rest.Api;
+using Nimbbl.Sdk.Rest;
 using Nimbbl.Sdk.Rest.Exception;
 using Nimbbl.Sdk.Rest.Common;
 
@@ -22,7 +22,7 @@ public static class TransactionStatusExamples
         var orderId = Helpers.GetInput("Enter Order ID (or press Enter to skip): ", false);
         var invoiceId = Helpers.GetInput("Enter Invoice ID (or press Enter to skip): ", false);
         
-        var transactionData = new Dictionary<string, object?>();
+        Dictionary<string, object?> transactionData = [];
         if (!string.IsNullOrWhiteSpace(transactionId))
         {
             transactionData["transaction_id"] = transactionId;
@@ -44,20 +44,7 @@ public static class TransactionStatusExamples
         
         try
         {
-            // Generate merchant token
-            var tokenResponse = await api.Auth().GenerateTokenAsync();
-            var merchantToken = tokenResponse.TryGetProperty("token", out var tokenProp) 
-                ? tokenProp.GetString() 
-                : null;
-            
-            if (string.IsNullOrWhiteSpace(merchantToken))
-            {
-                Helpers.PrintError("Failed to generate merchant token.\n");
-                return;
-            }
-            
-            api.SetBearerToken(merchantToken);
-            
+            // Merchant token is automatically generated and used for authentication
             var result = await api.Transactions().TransactionEnquiryAsync(transactionData);
             
             if (result.TryGetProperty("error", out var errorProp))
