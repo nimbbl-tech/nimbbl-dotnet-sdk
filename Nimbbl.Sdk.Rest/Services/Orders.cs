@@ -19,6 +19,9 @@ public class Orders : BaseService
     /// <remarks>See <see href="https://nimbbl.biz/docs/api-reference/create-an-order-v-3/">Create Order API</see> for more details.</remarks>
     public Task<JsonElement> CreateOrderAsync(Dictionary<string, object?> orderRequest)
     {
+        // order_source: the creating integration, fixed by the SDK so a caller cannot spoof it.
+        orderRequest["order_source"] = "dotnet-sdk";
+        orderRequest["order_source_version"] = SdkConstants.SdkVersion;
         var isEncryptEnabled = ApiClient.IsEncryptPayloadEnabled();
         Logger.DebugWithCaller($"CreateOrderAsync - Encryption enabled: {isEncryptEnabled}");
         
