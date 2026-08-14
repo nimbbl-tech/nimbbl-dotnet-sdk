@@ -326,8 +326,25 @@ try
                     Helpers.PrintDocLink("https://nimbbl.biz/docs/guides/encrypt-decrypt-payload/", "Encryption/Decryption Guide");
             break;
 
+                // Pre-auth (capture / void)
+                case "32":
+                    Console.ForegroundColor = ConsoleColor.White;
+                    Console.WriteLine("Capture (pre-auth)");
+                    Console.ResetColor();
+                    await PaymentExamples.CaptureExample(api);
+                    Helpers.PrintDocLink("https://nimbbl.biz/docs/api-reference/capture-a-payment-v-3/", "Capture Payment API");
+                    break;
+
+                case "33":
+                    Console.ForegroundColor = ConsoleColor.White;
+                    Console.WriteLine("Void (pre-auth)");
+                    Console.ResetColor();
+                    await PaymentExamples.VoidExample(api);
+                    Helpers.PrintDocLink("https://nimbbl.biz/docs/api-reference/void-a-payment-v-3/", "Void Payment API");
+                    break;
+
         default:
-                    Helpers.PrintError("Invalid choice. Please select a number from 0-31.\n");
+                    Helpers.PrintError("Invalid choice. Please select a number from 0-33.\n");
             break;
     }
 }
@@ -377,7 +394,9 @@ static void PrintMenu()
     Console.ResetColor();
     Console.WriteLine("5.  Initiate Payment");
     Console.WriteLine("6.  Complete Payment");
-    Console.WriteLine("7.  Resend OTP\n");
+    Console.WriteLine("7.  Resend OTP");
+    Console.WriteLine("32. Capture (pre-auth)");
+    Console.WriteLine("33. Void (pre-auth)\n");
     
     Console.ForegroundColor = ConsoleColor.Yellow;
     Console.WriteLine("=== Payment Links API ===");

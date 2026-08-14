@@ -41,5 +41,10 @@ public static class SdkConstants
 
     // Signature version values
     public const string SignatureVersionV3 = "v3";
+
+    // Webhook / callback payload version values
+    // v4 => signed-envelope handling (HMAC over the whole compact JSON; encrypted payloads
+    // are authenticated by successful decryption). Absent/v1/v2/v3 => legacy per-field handling.
+    public const string WebhookCallbackVersionV4 = "v4";
 }
 

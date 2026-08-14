@@ -31,6 +31,41 @@ public enum WebhookEventType
     PaymentReversed,
 
     /// <summary>
+    /// Payment authorized event (pre-auth): funds held, awaiting capture or void
+    /// </summary>
+    PaymentAuthorized,
+
+    /// <summary>
+    /// Capture pending event (pre-auth)
+    /// </summary>
+    CapturePending,
+
+    /// <summary>
+    /// Capture success event (pre-auth): held funds collected
+    /// </summary>
+    CaptureSuccess,
+
+    /// <summary>
+    /// Capture failed event (pre-auth)
+    /// </summary>
+    CaptureFailed,
+
+    /// <summary>
+    /// Void pending event (pre-auth)
+    /// </summary>
+    VoidPending,
+
+    /// <summary>
+    /// Void success event (pre-auth): hold released without charging
+    /// </summary>
+    VoidSuccess,
+
+    /// <summary>
+    /// Void failed event (pre-auth)
+    /// </summary>
+    VoidFailed,
+
+    /// <summary>
     /// Refund pending event
     /// </summary>
     RefundPending,
@@ -98,6 +133,13 @@ public static class WebhookEventTypeExtensions
             "payment_reversing" => WebhookEventType.PaymentReversing,
             "payment_reversal_failed" => WebhookEventType.PaymentReversalFailed,
             "payment_reversed" => WebhookEventType.PaymentReversed,
+            "payment_authorized" => WebhookEventType.PaymentAuthorized,
+            "capture_pending" => WebhookEventType.CapturePending,
+            "capture_success" => WebhookEventType.CaptureSuccess,
+            "capture_failed" => WebhookEventType.CaptureFailed,
+            "void_pending" => WebhookEventType.VoidPending,
+            "void_success" => WebhookEventType.VoidSuccess,
+            "void_failed" => WebhookEventType.VoidFailed,
             "refund_pending" => WebhookEventType.RefundPending,
             "refund_success" => WebhookEventType.RefundSuccess,
             "refund_failed" => WebhookEventType.RefundFailure,
@@ -123,6 +165,13 @@ public static class WebhookEventTypeExtensions
             WebhookEventType.PaymentReversing => true,
             WebhookEventType.PaymentReversalFailed => true,
             WebhookEventType.PaymentReversed => true,
+            WebhookEventType.PaymentAuthorized => true,
+            WebhookEventType.CapturePending => true,
+            WebhookEventType.CaptureSuccess => true,
+            WebhookEventType.CaptureFailed => true,
+            WebhookEventType.VoidPending => true,
+            WebhookEventType.VoidSuccess => true,
+            WebhookEventType.VoidFailed => true,
             _ => false
         };
     }

@@ -30,6 +30,10 @@ public static class JsonKeys
     public const string EncryptedResponse = "encrypted_response";
     public const string Payload = "payload";
 
+    // v4 webhook / callback envelope keys
+    public const string Version = "version";
+    public const string SubMerchantId = "sub_merchant_id";
+
     // Request parameter keys
     public const string InvoiceId = "invoice_id";
     public const string OrderId = "order_id";
@@ -73,6 +77,7 @@ public static class JsonKeys
 
     // Event type values
     public const string GlobalHandleCheckoutResponse = "globalHandleCheckoutResponse";
+    public const string GlobalCloseCheckoutModal = "globalCloseCheckoutModal";
 
     // Transaction type values
     public const string TransactionTypePayment = "payment";
@@ -85,6 +90,10 @@ public static class JsonKeys
     public const string LastName = "last_name";
     public const string UpiHolder = "upi_holder";
     public const string CardHolderName = "card_holder_name";
+    // Response-side PII field names (webhook/callback use short forms)
+    public const string CardHolder = "card_holder";
+    public const string Mobile = "mobile";
+    public const string State = "state";
     public const string Street = "street";
     public const string Landmark = "landmark";
     public const string Area = "area";

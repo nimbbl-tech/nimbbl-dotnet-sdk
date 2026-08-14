@@ -197,7 +197,7 @@ public static class PaymentExamples
             };
             
             var result = await api.Payments().ResendPaymentOtpAsync(data);
-            
+
             if (result.TryGetProperty("error", out var errorProp))
             {
                 Helpers.PrintError($"Error: {errorProp}\n");
@@ -205,6 +205,106 @@ public static class PaymentExamples
             else
             {
                 Helpers.PrintSuccess("OTP resent successfully!\n");
+                Console.WriteLine(JsonSerializer.Serialize(result, new JsonSerializerOptions { WriteIndented = true }));
+            }
+        }
+        catch (Exception ex)
+        {
+            Helpers.PrintException(ex);
+        }
+    }
+
+    /// <summary>
+    /// Capture a pre-authorized (pre-auth) payment — collect the held funds (full amount only).
+    ///
+    /// Pre-auth requires capture_mode=manual on your sub-merchant (contact Nimbbl). After the
+    /// customer completes a pre-auth payment the transaction is 'authorized' — then CAPTURE
+    /// collects the held funds. A 'pending' status is normal; confirm via the capture_success
+    /// webhook or the Transaction Enquiry API. Never fulfil an order on 'authorized' alone.
+    /// See https://nimbbl.biz/docs/api-reference/capture-a-payment-v-3/
+    /// </summary>
+    public static async Task CaptureExample(NimbblApi api)
+    {
+        try
+        {
+            // Merchant token is automatically generated and used for authentication
+            var transactionId = Helpers.GetInput("Enter the authorized Transaction ID to capture: ");
+            if (string.IsNullOrWhiteSpace(transactionId))
+            {
+                Helpers.PrintError("Transaction ID is required.\n");
+                return;
+            }
+
+            var data = new Dictionary<string, object?>
+            {
+                [JsonKeys.TransactionId] = transactionId
+            };
+
+            var comment = Helpers.GetInput("Enter Comment (optional, e.g. 'Goods dispatched'): ", false);
+            if (!string.IsNullOrWhiteSpace(comment))
+            {
+                data["comment"] = comment;
+            }
+
+            var result = await api.Payments().CaptureAsync(data);
+
+            if (result.TryGetProperty("error", out var errorProp))
+            {
+                Helpers.PrintError($"Error: {errorProp}\n");
+            }
+            else
+            {
+                Helpers.PrintSuccess("Capture request accepted!\n");
+                Helpers.PrintInfo("Status may be 'pending' — this is normal. Confirm via the capture_success webhook or Transaction Enquiry.\n");
+                Console.WriteLine(JsonSerializer.Serialize(result, new JsonSerializerOptions { WriteIndented = true }));
+            }
+        }
+        catch (Exception ex)
+        {
+            Helpers.PrintException(ex);
+        }
+    }
+
+    /// <summary>
+    /// Void (cancel) a pre-authorized (pre-auth) payment — release the hold without charging the customer.
+    ///
+    /// Acts on a transaction in the 'authorized' status only. A 'pending' status is normal;
+    /// confirm via the void_success webhook or the Transaction Enquiry API.
+    /// See https://nimbbl.biz/docs/api-reference/void-a-payment-v-3/
+    /// </summary>
+    public static async Task VoidExample(NimbblApi api)
+    {
+        try
+        {
+            // Merchant token is automatically generated and used for authentication
+            var transactionId = Helpers.GetInput("Enter the authorized Transaction ID to void: ");
+            if (string.IsNullOrWhiteSpace(transactionId))
+            {
+                Helpers.PrintError("Transaction ID is required.\n");
+                return;
+            }
+
+            var data = new Dictionary<string, object?>
+            {
+                [JsonKeys.TransactionId] = transactionId
+            };
+
+            var comment = Helpers.GetInput("Enter Comment (optional, e.g. 'Customer cancelled'): ", false);
+            if (!string.IsNullOrWhiteSpace(comment))
+            {
+                data["comment"] = comment;
+            }
+
+            var result = await api.Payments().VoidAsync(data);
+
+            if (result.TryGetProperty("error", out var errorProp))
+            {
+                Helpers.PrintError($"Error: {errorProp}\n");
+            }
+            else
+            {
+                Helpers.PrintSuccess("Void request accepted!\n");
+                Helpers.PrintInfo("Status may be 'pending' — this is normal. Confirm via the void_success webhook or Transaction Enquiry.\n");
                 Console.WriteLine(JsonSerializer.Serialize(result, new JsonSerializerOptions { WriteIndented = true }));
             }
         }

@@ -1,5 +1,6 @@
 using System.Linq;
 using System.Net.Http.Headers;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
@@ -7,6 +8,8 @@ namespace Nimbbl.Sdk.Rest.Common;
 
 /// <summary>
 /// Utility to mask sensitive data in headers and JSON bodies for logging.
+/// Behaviour mirrors the PHP SDK's CentralMasker (Nimbbl PII masking guidelines:
+/// https://nimbbl.biz/docs/guides/handling-pii-data/).
 /// </summary>
 internal static class CentralMasker
 {
@@ -17,29 +20,38 @@ internal static class CentralMasker
 
     // Mask sensitive financial/authentication data in INFO logs
     // These are only visible unmasked when DEBUG logging is enabled
-    // Based on Nimbbl PII masking guidelines: https://nimbbl.biz/docs/guides/handling-pii-data/
     private static readonly HashSet<string> SensitiveBodyKeys = new(StringComparer.OrdinalIgnoreCase)
     {
         // Authentication credentials (masked in INFO, visible in DEBUG)
-       JsonKeys.AccessKey, JsonKeys.AccessSecret,
+        JsonKeys.AccessKey, JsonKeys.AccessSecret,
         // Authentication tokens
-        JsonKeys.Token,JsonKeys.RefreshToken,
-        // Names (First letter + asterisks)
+        JsonKeys.Token, JsonKeys.RefreshToken,
+        // Names
         JsonKeys.FirstName, JsonKeys.LastName, JsonKeys.CardHolderName, JsonKeys.UpiHolder,
-        // Mobile/Phone (Country code + last 4 digits)
-         JsonKeys.MobileNumber,
-        // Email (First 2 chars + asterisks + domain)
+        // Response-side PII field names (webhook/callback use short forms)
+        JsonKeys.Name, JsonKeys.CardHolder,
+        // Mobile/Phone
+        JsonKeys.MobileNumber, JsonKeys.Mobile,
+        // Email
         JsonKeys.Email,
-        // Address fields (First char/letters + asterisks)
-          JsonKeys.Street, JsonKeys.Landmark, JsonKeys.Area, JsonKeys.City,
-        // Pincode (First 2 digits + asterisks)
+        // Address fields
+        JsonKeys.Street, JsonKeys.Landmark, JsonKeys.Area, JsonKeys.City, JsonKeys.State,
+        // Pincode
         JsonKeys.Pincode, JsonKeys.PinCode, JsonKeys.PostalCode, JsonKeys.ZipCode,
-        // UPI/VPA (First 2 digits + asterisks + last 2 digits + domain)
+        // UPI/VPA
         JsonKeys.Vpa,
         // Payment card sensitive data
-        JsonKeys.CardNo, JsonKeys.CardNumber, JsonKeys.Cvv,JsonKeys.ExpiryDate,
+        JsonKeys.CardNo, JsonKeys.CardNumber, JsonKeys.Cvv, JsonKeys.ExpiryDate,
         // Account details
         JsonKeys.AccountNumber, JsonKeys.AccountNo, JsonKeys.IfscCode, JsonKeys.PanCard,
+    };
+
+    // JSON output encoder: keep slashes/unicode unescaped (parity with PHP JSON_UNESCAPED_SLASHES).
+    private static readonly JsonSerializerOptions MaskedBodyOptions = new()
+    {
+        PropertyNamingPolicy = null,
+        WriteIndented = false,
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     };
 
     public static Dictionary<string, string> MaskHeaders(HttpHeaders headers, HttpHeaders? contentHeaders = null)
@@ -49,14 +61,7 @@ internal static class CentralMasker
         void AddMaskedHeader(KeyValuePair<string, IEnumerable<string>> header)
         {
             var value = string.Join(", ", header.Value);
-            if (SensitiveHeaderKeys.Contains(header.Key))
-            {
-                masked[header.Key] = MaskString(value);
-            }
-            else
-            {
-                masked[header.Key] = value;
-            }
+            masked[header.Key] = SensitiveHeaderKeys.Contains(header.Key) ? MaskString(value) : value;
         }
 
         foreach (var header in headers) AddMaskedHeader(header);
@@ -74,7 +79,7 @@ internal static class CentralMasker
     public static Dictionary<string, string> GetUnmaskedHeaders(HttpHeaders headers, HttpHeaders? contentHeaders = null)
     {
         var unmasked = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        
+
         void AddHeader(HttpHeaders headerCollection)
         {
             foreach (var header in headerCollection)
@@ -100,11 +105,7 @@ internal static class CentralMasker
         {
             using var doc = JsonDocument.Parse(body);
             var masked = MaskElement(doc.RootElement);
-            return JsonSerializer.Serialize(masked, new JsonSerializerOptions
-            {
-                PropertyNamingPolicy = null,
-                WriteIndented = false
-            });
+            return JsonSerializer.Serialize(masked, MaskedBodyOptions);
         }
         catch
         {
@@ -127,30 +128,35 @@ internal static class CentralMasker
                         {
                             var value = prop.Value.GetString() ?? string.Empty;
                             var key = prop.Name.ToLowerInvariant();
-                            
+
                             // Use appropriate masking based on key type (following Nimbbl PII masking guidelines)
-                            if (key == JsonKeys.AccessKey || key == JsonKeys.AccessSecret)
+                            if (key == JsonKeys.AccessSecret)
+                                return (object)MaskAccessSecret(value);
+                            if (key == JsonKeys.AccessKey)
                                 return (object)MaskAccessKey(value);
-                            if (key.Contains("token", StringComparison.OrdinalIgnoreCase))
+                            if (key.Contains("token"))
                                 return (object)MaskToken(value);
-                            if (key.Contains("name") || key == JsonKeys.FirstName || key == JsonKeys.LastName || key == JsonKeys.UpiHolder || key == JsonKeys.CardHolderName)
+                            if (key.Contains("name") || key == JsonKeys.FirstName || key == JsonKeys.LastName
+                                || key == JsonKeys.CardHolderName || key == JsonKeys.CardHolder || key == JsonKeys.UpiHolder)
                                 return (object)MaskName(value);
                             if (key.Contains("phone") || key.Contains("mobile") || key.Contains("contact_number"))
                                 return (object)MaskPhone(value);
                             if (key.Contains("email"))
                                 return (object)MaskEmail(value);
-                            if (key.Contains("address") || key == JsonKeys.Street || key == JsonKeys.Landmark || key == JsonKeys.Area || key == JsonKeys.City)
+                            if (key.Contains("address") || key == JsonKeys.Street || key == JsonKeys.Landmark || key == JsonKeys.Area)
                                 return (object)MaskAddress(value);
-                            if (key.Contains("pincode") || key == JsonKeys.Pincode || key == JsonKeys.PostalCode || key == JsonKeys.ZipCode)
+                            if (key == JsonKeys.City || key == JsonKeys.State)
+                                return (object)MaskCityArea(value);
+                            if (key.Contains("pincode") || key == JsonKeys.Pincode || key == JsonKeys.PinCode || key == JsonKeys.PostalCode || key == JsonKeys.ZipCode)
                                 return (object)MaskPincode(value);
                             if (key.Contains("upi") || key == JsonKeys.Vpa)
                                 return (object)MaskUpiId(value);
                             if (key == JsonKeys.CardNo || key == JsonKeys.CardNumber)
                                 return (object)MaskCardNumber(value);
                             if (key == JsonKeys.Cvv)
-                                return (object)"XXX";
+                                return (object)"***";
                             if (key.Contains("expiry") || key == JsonKeys.ExpiryDate)
-                                return (object)"XX/XXXX";
+                                return (object)"**/****";
                             if (key == JsonKeys.AccountNumber || key == JsonKeys.AccountNo)
                                 return (object)MaskAccountNumber(value);
                             if (key.Contains("ifsc") || key == JsonKeys.IfscCode)
@@ -159,7 +165,11 @@ internal static class CentralMasker
                                 return (object)MaskPan(value);
                             return (object)MaskString(value);
                         }
-                        return (object)"***";
+
+                        // Numeric sensitive values are masked as "***"; nested objects/arrays still recurse.
+                        if (prop.Value.ValueKind is JsonValueKind.Number)
+                            return (object)"***";
+                        return MaskElement(prop.Value);
                     }
                     return MaskElement(prop.Value);
                 }),
@@ -169,6 +179,8 @@ internal static class CentralMasker
         };
     }
 
+    // --- Masking Methods (parity with PHP CentralMasker) ---
+
     private static string MaskString(string value)
     {
         if (string.IsNullOrEmpty(value)) return value;
@@ -176,70 +188,71 @@ internal static class CentralMasker
         // Show first 4 and last 4 characters, mask the middle
         return $"{value[..4]}***{value[^4..]}";
     }
-    
-    // Mask token with more characters visible (for longer tokens)
+
+    // Nimbbl API format (mask_token): first 5 + 11 asterisks + last 7
     private static string MaskToken(string value)
     {
         if (string.IsNullOrEmpty(value)) return value;
+        value = value.Trim();
         if (value.Length <= 12) return new string('*', value.Length);
-        // Show first 5 and last 7 characters for tokens
         return $"{value[..5]}***********{value[^7..]}";
     }
-    
-    // Mask access_key and access_secret: Show first 4 and last 4 characters
-    // For fixed-length 20-character keys: "pKx7rWVgVpbXQvq2" -> "pKx7****XQvq2"
+
+    // access_key has no dedicated Nimbbl API rule; show first 4 and last 4
     private static string MaskAccessKey(string value)
     {
         if (string.IsNullOrEmpty(value)) return value;
         if (value.Length <= 8) return new string('*', value.Length);
-        // Show first 4 and last 4 characters for access keys/secrets (consistent for fixed-length 20-char keys)
         return $"{value[..4]}****{value[^4..]}";
     }
 
+    // Nimbbl API format (mask_access_secret): first 17 + 11 asterisks + last 4
+    private static string MaskAccessSecret(string value)
+    {
+        if (string.IsNullOrEmpty(value)) return value;
+        value = value.Trim();
+        if (value.Length <= 21) return new string('*', value.Length);
+        return $"{value[..17]}***********{value[^4..]}";
+    }
 
-    // Mask name: First letter + asterisks (e.g., "Diana Prince" -> "D**** P*****")
+    // Mask name: First letter + asterisks per word (e.g., "Diana Prince" -> "D**** P*****")
     private static string MaskName(string value)
     {
         if (string.IsNullOrWhiteSpace(value)) return value;
-        
-        // Split by spaces to handle full names
-        var parts = value.Trim().Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+
+        var parts = value.Trim().Split(new[] { ' ', '\t', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
         if (parts.Length == 0) return new string('*', value.Length);
-        
+
         var maskedParts = parts.Select(part =>
         {
-            if (string.IsNullOrWhiteSpace(part)) return part;
-            if (part.Length == 1) return part + "*";
-            // First letter + asterisks
+            if (string.IsNullOrEmpty(part)) return part;
+            if (part.Length <= 1) return part;
             return part[0] + new string('*', part.Length - 1);
         });
-        
+
         return string.Join(" ", maskedParts);
     }
-    
+
     // Mask phone: Country code + last 4 digits (e.g., "+91 9876543210" -> "+91 ******3210")
     private static string MaskPhone(string value)
     {
         if (string.IsNullOrWhiteSpace(value)) return value;
-        
-        // Remove spaces and common separators
+
         var cleaned = value.Replace(" ", "").Replace("-", "").Replace("(", "").Replace(")", "");
-        
-        // Try to detect country code (starts with +)
+
         if (cleaned.StartsWith("+"))
         {
-            // Find where country code ends (usually 1-3 digits after +)
             var countryCodeEnd = 1;
             while (countryCodeEnd < cleaned.Length && char.IsDigit(cleaned[countryCodeEnd]))
             {
                 countryCodeEnd++;
             }
-            
+
             if (countryCodeEnd < cleaned.Length)
             {
                 var countryCode = cleaned[..countryCodeEnd];
                 var number = cleaned[countryCodeEnd..];
-                
+
                 if (number.Length >= 4)
                 {
                     var last4 = number[^4..];
@@ -248,67 +261,85 @@ internal static class CentralMasker
                 }
             }
         }
-        
-        // If no country code, show last 4 digits
+
         if (cleaned.Length >= 4 && cleaned.All(char.IsDigit))
         {
             var last4 = cleaned[^4..];
             var masked = new string('*', cleaned.Length - 4);
             return $"{masked}{last4}";
         }
-        
+
         return new string('*', value.Length);
     }
-    
-    // Mask email: First 2 chars + asterisks + domain (e.g., "[email protected]" -> "wo********@example.com")
+
+    // Mask email (mask_email): URL-decode, then tier by local-part length.
     private static string MaskEmail(string value)
     {
-        if (string.IsNullOrWhiteSpace(value)) return value;
-        
-        var atIndex = value.IndexOf('@');
-        if (atIndex > 0 && atIndex < value.Length - 1)
+        if (string.IsNullOrEmpty(value)) return value;
+
+        var processed = SafeUrlDecode(value);
+        var atIndex = processed.IndexOf('@');
+        if (atIndex < 0) return value;
+
+        var local = processed[..atIndex];
+        var domain = processed[atIndex..]; // includes '@'
+        var len = local.Length;
+
+        string maskedLocal;
+        if (len <= 2)
         {
-            var localPart = value[..atIndex];
-            var domain = value[atIndex..];
-            
-            if (localPart.Length <= 2)
-            {
-                return new string('*', localPart.Length) + domain;
-            }
-            
-            var first2 = localPart[..2];
-            var masked = new string('*', localPart.Length - 2);
-            return $"{first2}{masked}{domain}";
+            maskedLocal = len > 1 ? local[0] + new string('*', len - 1) : local;
         }
-        
-        return new string('*', value.Length);
+        else if (len <= 4)
+        {
+            maskedLocal = local[0] + new string('*', len - 2) + local[^1..];
+        }
+        else
+        {
+            maskedLocal = local[..2] + new string('*', len - 4) + local[^2..];
+        }
+
+        return maskedLocal + domain;
     }
-    
+
+    // Mask city/state (mask_city_area): first 2 letters of each word shown, rest masked.
+    private static string MaskCityArea(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return value;
+
+        var parts = value.Trim().Split(new[] { ' ', '\t', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 0) return new string('*', value.Length);
+
+        var maskedParts = parts.Select(part =>
+            part.Length <= 2 ? part : part[..2] + new string('*', part.Length - 2));
+
+        return string.Join(" ", maskedParts);
+    }
+
     // Mask address: First char + asterisks (e.g., "123 Main Street" -> "1** M*** S*****")
     private static string MaskAddress(string value)
     {
         if (string.IsNullOrWhiteSpace(value)) return value;
-        
-        // Split by spaces to handle multi-word addresses
-        var parts = value.Trim().Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+
+        var parts = value.Trim().Split(new[] { ' ', '\t', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
         if (parts.Length == 0) return new string('*', value.Length);
-        
+
         var maskedParts = parts.Select(part =>
         {
-            if (string.IsNullOrWhiteSpace(part)) return part;
-            if (part.Length == 1) return part + "*";
-            // First char + asterisks
+            if (string.IsNullOrEmpty(part)) return part;
+            if (part.Length == 1) return part;
+            if (part.Length == 2) return part[0] + "*";
             return part[0] + new string('*', part.Length - 1);
         });
-        
+
         return string.Join(" ", maskedParts);
     }
-    
+
     // Mask pincode: First 2 digits + asterisks (e.g., "100389" -> "10****")
     private static string MaskPincode(string value)
     {
-        if (string.IsNullOrWhiteSpace(value)) return value;
-        
+        if (string.IsNullOrEmpty(value)) return value;
+
         var cleaned = value.Trim().Replace(" ", "").Replace("-", "");
         if (cleaned.Length >= 2 && cleaned.All(char.IsDigit))
         {
@@ -316,70 +347,52 @@ internal static class CentralMasker
             var masked = new string('*', cleaned.Length - 2);
             return $"{first2}{masked}";
         }
-        
+
         return new string('*', value.Length);
     }
-    
-    // Mask UPI ID: First 2 digits + asterisks + last 2 digits + domain (e.g., "91111111111@superyes" -> "91*******11@superyes")
+
+    // Mask UPI ID (mask_vpa_id): URL-decode + validate; then tier by user length.
     private static string MaskUpiId(string value)
     {
-        if (string.IsNullOrWhiteSpace(value)) return value;
-        
-        var atIndex = value.IndexOf('@');
-        if (atIndex > 0 && atIndex < value.Length - 1)
+        if (string.IsNullOrEmpty(value)) return value;
+
+        var processed = SafeUrlDecode(value);
+        var atIndex = processed.IndexOf('@');
+        if (atIndex < 0) return value;
+        if (!Regex.IsMatch(processed, "^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+$")) return value;
+
+        var user = processed[..atIndex];
+        var domain = processed[atIndex..]; // includes '@'
+        var len = user.Length;
+
+        string maskedUser;
+        if (len <= 4)
         {
-            var localPart = value[..atIndex];
-            var domain = value[atIndex..];
-            
-            if (localPart.Length <= 4)
-            {
-                return new string('*', localPart.Length) + domain;
-            }
-            
-            var first2 = localPart[..2];
-            var last2 = localPart[^2..];
-            var masked = new string('*', localPart.Length - 4);
-            return $"{first2}{masked}{last2}{domain}";
+            maskedUser = len > 2 ? user[0] + new string('*', len - 2) + user[^1..] : user;
         }
-        
-        // If no @, treat as number and mask
-        if (value.Length >= 4)
+        else
         {
-            var first2 = value[..2];
-            var last2 = value[^2..];
-            var masked = new string('*', value.Length - 4);
-            return $"{first2}{masked}{last2}";
+            maskedUser = user[..2] + new string('*', len - 4) + user[^2..];
         }
-        
-        return new string('*', value.Length);
+
+        return maskedUser + domain;
     }
-    
-    // Mask card number: Last 4 digits visible (e.g., "4111 1111 1111 1111" -> "XXXX XXXX XXXX 1111")
+
+    // Mask card number (mask_card): fixed "**** **** **** " + last 4.
     private static string MaskCardNumber(string value)
     {
-        if (string.IsNullOrWhiteSpace(value)) return value;
-        
-        // Remove spaces and dashes
+        if (string.IsNullOrEmpty(value)) return value;
+
         var cleaned = value.Replace(" ", "").Replace("-", "");
-        
-        if (cleaned.Length >= 4 && cleaned.All(char.IsDigit))
-        {
-            var last4 = cleaned[^4..];
-            // Format as XXXX XXXX XXXX 1111 (group by 4)
-            var masked = new string('X', cleaned.Length - 4);
-            var formatted = string.Join(" ", Enumerable.Range(0, (masked.Length + 3) / 4)
-                .Select(i => masked[(i * 4)..Math.Min(i * 4 + 4, masked.Length)]));
-            return formatted + " " + last4;
-        }
-        
-        return "XXXX XXXX XXXX XXXX";
+        var last4 = cleaned.Length >= 4 ? cleaned[^4..] : cleaned;
+        return "**** **** **** " + last4;
     }
-    
+
     // Mask account number: Last 4 digits visible (e.g., "123456789012" -> "********9012")
     private static string MaskAccountNumber(string value)
     {
-        if (string.IsNullOrWhiteSpace(value)) return value;
-        
+        if (string.IsNullOrEmpty(value)) return value;
+
         var cleaned = value.Trim().Replace(" ", "").Replace("-", "");
         if (cleaned.Length >= 4 && cleaned.All(char.IsDigit))
         {
@@ -387,32 +400,27 @@ internal static class CentralMasker
             var masked = new string('*', cleaned.Length - 4);
             return $"{masked}{last4}";
         }
-        
+
         return new string('*', value.Length);
     }
-    
-    // Mask IFSC: First 4 chars + asterisks + last 2 chars (e.g., "UTIB00047" -> "UTIB***47")
+
+    // Mask IFSC (mask_ifsc_code): <6 returned as-is; >=8 -> first4+*+last2; 6-7 -> first2+*+last2.
     private static string MaskIfsc(string value)
     {
-        if (string.IsNullOrWhiteSpace(value)) return value;
-        
+        if (string.IsNullOrEmpty(value)) return value;
+
         var cleaned = value.Trim().ToUpperInvariant();
-        if (cleaned.Length >= 6)
-        {
-            var first4 = cleaned[..4];
-            var last2 = cleaned[^2..];
-            var masked = new string('*', cleaned.Length - 6);
-            return $"{first4}{masked}{last2}";
-        }
-        
-        return new string('*', value.Length);
+        var len = cleaned.Length;
+        if (len < 6) return value;
+        if (len >= 8) return cleaned[..4] + new string('*', len - 6) + cleaned[^2..];
+        return cleaned[..2] + new string('*', len - 4) + cleaned[^2..];
     }
-    
+
     // Mask PAN: First 3 chars + asterisks + last char (e.g., "BXXPD8601C" -> "BXX******C")
     private static string MaskPan(string value)
     {
-        if (string.IsNullOrWhiteSpace(value)) return value;
-        
+        if (string.IsNullOrEmpty(value)) return value;
+
         var cleaned = value.Trim().ToUpperInvariant();
         if (cleaned.Length >= 4)
         {
@@ -421,7 +429,7 @@ internal static class CentralMasker
             var masked = new string('*', cleaned.Length - 4);
             return $"{first3}{masked}{last1}";
         }
-        
+
         return new string('*', value.Length);
     }
 
@@ -453,5 +461,16 @@ internal static class CentralMasker
 
         return masked;
     }
-}
 
+    private static string SafeUrlDecode(string value)
+    {
+        try
+        {
+            return Uri.UnescapeDataString(value);
+        }
+        catch
+        {
+            return value;
+        }
+    }
+}
