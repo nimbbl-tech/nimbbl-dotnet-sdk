@@ -6,6 +6,8 @@ namespace Nimbbl.Sdk.Rest.Common;
 public static class JsonKeys
 {
     // Error response keys
+    public const string OrderSource = "order_source";
+    public const string OrderSourceVersion = "order_source_version";
     public const string ErrorCode = "nimbbl_error_code";
     public const string ErrorMerchantMessage = "nimbbl_merchant_message";
     public const string ErrorConsumerMessage = "nimbbl_consumer_message";

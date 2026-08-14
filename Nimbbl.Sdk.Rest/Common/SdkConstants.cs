@@ -9,8 +9,13 @@ public static class SdkConstants
     /// <summary>
     /// SDK name - matches Product name from assembly
     /// </summary>
-    public static readonly string SdkName = Assembly.GetCustomAttribute<AssemblyProductAttribute>()?.Product 
+    public static readonly string SdkName = Assembly.GetCustomAttribute<AssemblyProductAttribute>()?.Product
         ?? Assembly.GetName().Name ?? "Nimbbl .NET SDK";
+
+    /// <summary>
+    /// order_source value stamped on create-order (SDK-fixed, anti-spoof).
+    /// </summary>
+    public const string OrderSource = "dotnet-sdk";
     
     /// <summary>
     /// SDK version - read from assembly version (git commit hash removed for cleaner display)

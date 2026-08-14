@@ -21,7 +21,13 @@ public class Orders : BaseService
     {
         var isEncryptEnabled = ApiClient.IsEncryptPayloadEnabled();
         Logger.DebugWithCaller($"CreateOrderAsync - Encryption enabled: {isEncryptEnabled}");
-        
+
+        // Copy so the SDK-added fields below don't mutate the caller's dictionary.
+        orderRequest = new Dictionary<string, object?>(orderRequest);
+        // order_source is fixed by the creating SDK (anti-spoof); a caller cannot override it.
+        orderRequest[JsonKeys.OrderSource] = SdkConstants.OrderSource;
+        orderRequest[JsonKeys.OrderSourceVersion] = SdkConstants.SdkVersion;
+
         // Encrypt payload if encryption is enabled
         if (isEncryptEnabled)
         {
