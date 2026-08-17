@@ -937,9 +937,15 @@ internal class ApiClient : IDisposable
                 request.Content = new StringContent(requestBody, System.Text.Encoding.UTF8, "application/json");
             }
             
-            // Use Logger.InfoWithCaller for logging with caller info
-            _logger.InfoWithCaller(logMessage, callerInfo);
-            
+            // Use Logger.InfoWithCaller for logging with caller info + structured HTTP context
+            var requestContext = new LogContext
+            {
+                ApiVersion = ApiConstants.ApiVersion,
+                ApiTag = callerInfo.Module,
+                Uri = uri
+            };
+            _logger.InfoWithCaller(logMessage, callerInfo, requestContext);
+
             // Log raw request body for debugging (unmasked)
             if (requestBody != null)
             {
@@ -1009,8 +1015,15 @@ internal class ApiClient : IDisposable
                 logMessage += $"\nResponse Body: {bodyToLog}";
             }
             
-            // Use Logger.Info with caller info from request log (or get fresh if not provided)
-            logger.InfoWithCaller(logMessage, callerInfo);
+            // Use Logger.Info with caller info from request log (or get fresh if not provided) + structured HTTP context
+            var responseContext = new LogContext
+            {
+                ApiVersion = ApiConstants.ApiVersion,
+                ApiTag = callerInfo?.Module,
+                Uri = uri,
+                StatusCode = statusCode.ToString()
+            };
+            logger.InfoWithCaller(logMessage, callerInfo, responseContext);
             
             // Log raw response body for debugging (unmasked)
             var rawBody = responseBody ?? (response.Content != null ? await response.Content.ReadAsStringAsync() : null);
