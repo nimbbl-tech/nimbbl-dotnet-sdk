@@ -59,3 +59,5 @@ dist/
 PUBLISH_TO_NUGET.md
 publish-to-nuget.sh
 MerchantSampleApp/
+# NuGet package output from publish.sh
+artifacts/

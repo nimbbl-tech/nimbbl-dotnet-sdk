@@ -28,7 +28,7 @@ public class Payments : BaseService
     /// </summary>
     /// <param name="request">Payment completion request parameters</param>
     /// <returns>JSON response containing payment completion details</returns>
-    /// <remarks>See <see href="https://nimbbl.biz/docs/api-reference/complete-payment-v-3/">Complete Payment API</see> for more details.</remarks>
+    /// <remarks>See <see href="https://nimbbl.biz/docs/api-reference/complete-a-payment-v-3/">Complete Payment API</see> for more details.</remarks>
     public Task<JsonElement> CompletePaymentAsync(Dictionary<string, object?> request)
     {
         return ApiClient.Post<Dictionary<string, object?>, JsonElement>(ApiConstants.PaymentComplete, request);
@@ -40,7 +40,7 @@ public class Payments : BaseService
     /// </summary>
     /// <param name="request">Resend OTP request parameters</param>
     /// <returns>JSON response containing OTP resend status</returns>
-    /// <remarks>See <see href="https://nimbbl.biz/docs/api-reference/resend-otp-v-3/">Resend OTP API</see> for more details.</remarks>
+    /// <remarks>See <see href="https://nimbbl.biz/docs/api-reference/resend-an-otp-v-3/">Resend OTP API</see> for more details.</remarks>
     public Task<JsonElement> ResendPaymentOtpAsync(Dictionary<string, object?> request)
     {
         return ApiClient.Post<Dictionary<string, object?>, JsonElement>(ApiConstants.PaymentResendOtp, request);
@@ -54,7 +54,7 @@ public class Payments : BaseService
     /// </summary>
     /// <param name="request">Capture request parameters. Expects <c>transaction_id</c> (authorized txn); optional <c>comment</c>.</param>
     /// <returns>JSON response containing capture details</returns>
-    /// <remarks>See <see href="https://nimbbl.biz/docs/api-reference/capture-a-payment-v-3/">Capture Payment API</see> for more details.</remarks>
+    /// <remarks>See <see href="https://nimbbl.biz/docs/api-reference/introduction/">Capture Payment API</see> for more details.</remarks>
     public Task<JsonElement> CaptureAsync(Dictionary<string, object?> request)
     {
         return PostWithOptionalEncryptionAsync(ApiConstants.Capture, request, "capture");
@@ -67,7 +67,7 @@ public class Payments : BaseService
     /// </summary>
     /// <param name="request">Void request parameters. Expects <c>transaction_id</c> (authorized txn); optional <c>comment</c>.</param>
     /// <returns>JSON response containing void details</returns>
-    /// <remarks>See <see href="https://nimbbl.biz/docs/api-reference/void-a-payment-v-3/">Void Payment API</see> for more details.</remarks>
+    /// <remarks>See <see href="https://nimbbl.biz/docs/api-reference/introduction/">Void Payment API</see> for more details.</remarks>
     public Task<JsonElement> VoidAsync(Dictionary<string, object?> request)
     {
         return PostWithOptionalEncryptionAsync(ApiConstants.Void, request, "void");

@@ -49,7 +49,7 @@ public static class CheckoutUtilitiesExamples
         Helpers.PrintStep(9, "Get UPI App Details");
         await GetUpiAppDetailsExample(api);
         
-        Console.WriteLine("\nFor more information, see: https://nimbbl.biz/docs/category/api-reference/checkout-utilities/\n");
+        Console.WriteLine("\nFor more information, see: https://nimbbl.biz/docs/api-reference/introduction/\n");
     }
 
     public static async Task ListPaymentModesExample(NimbblApi api)

@@ -9,7 +9,7 @@ namespace Nimbbl.Sdk.Rest.Common;
 /// <summary>
 /// Utility to mask sensitive data in headers and JSON bodies for logging.
 /// Behaviour mirrors the PHP SDK's CentralMasker (Nimbbl PII masking guidelines:
-/// https://nimbbl.biz/docs/guides/handling-pii-data/).
+/// https://nimbbl.biz/docs/guides/integration/handling-pii-data/).
 /// </summary>
 internal static class CentralMasker
 {

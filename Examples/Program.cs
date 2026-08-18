@@ -114,7 +114,7 @@ try
                     Console.WriteLine("Complete Payment");
                     Console.ResetColor();
                     await PaymentExamples.CompletePaymentExample(api);
-                    Helpers.PrintDocLink("https://nimbbl.biz/docs/api-reference/complete-payment-v-3/", "Complete Payment API");
+                    Helpers.PrintDocLink("https://nimbbl.biz/docs/api-reference/complete-a-payment-v-3/", "Complete Payment API");
             break;
                     
         case "7":
@@ -122,11 +122,11 @@ try
                     Console.WriteLine("Resend OTP");
                     Console.ResetColor();
                     await PaymentExamples.ResendOtpExample(api);
-                    Helpers.PrintDocLink("https://nimbbl.biz/docs/api-reference/resend-otp-v-3/", "Resend OTP API");
+                    Helpers.PrintDocLink("https://nimbbl.biz/docs/api-reference/resend-an-otp-v-3/", "Resend OTP API");
             break;
                     
                 // Payment Links API
-        case "8":
+        case "10":
                     Console.ForegroundColor = ConsoleColor.White;
                     Console.WriteLine("Create Payment Link");
                     Console.ResetColor();
@@ -134,7 +134,7 @@ try
                     Helpers.PrintDocLink("https://nimbbl.biz/docs/api-reference/create-a-payment-link-v-3/", "Create Payment Link API");
             break;
                     
-        case "9":
+        case "11":
                     Console.ForegroundColor = ConsoleColor.White;
                     Console.WriteLine("Update Payment Link");
                     Console.ResetColor();
@@ -142,7 +142,7 @@ try
                     Helpers.PrintDocLink("https://nimbbl.biz/docs/api-reference/update-a-payment-link-v-3/", "Update Payment Link API");
             break;
                     
-        case "10":
+        case "12":
                     Console.ForegroundColor = ConsoleColor.White;
                     Console.WriteLine("Payment Link Enquiry");
                     Console.ResetColor();
@@ -150,7 +150,7 @@ try
                     Helpers.PrintDocLink("https://nimbbl.biz/docs/api-reference/payment-link-enquiry-v-3/", "Payment Link Enquiry API");
             break;
                     
-        case "11":
+        case "13":
                     Console.ForegroundColor = ConsoleColor.White;
                     Console.WriteLine("Payment Link Actions");
                     Console.ResetColor();
@@ -158,8 +158,8 @@ try
                     Helpers.PrintDocLink("https://nimbbl.biz/docs/api-reference/payment-link-actions-v-3/", "Payment Link Actions API");
                     break;
                     
-                // Addresses API - cases 12-18
-                case "12":
+                // Addresses API - cases 14-20
+                case "14":
                     Console.ForegroundColor = ConsoleColor.White;
                     Console.WriteLine("List Addresses");
                     Console.ResetColor();
@@ -170,7 +170,7 @@ try
                     Helpers.PrintDocLink("https://nimbbl.biz/docs/api-reference/list-addresses-v-3/", "List Addresses API");
                     break;
                     
-                case "13":
+                case "15":
                     Console.ForegroundColor = ConsoleColor.White;
                     Console.WriteLine("Create Address");
                     Console.ResetColor();
@@ -178,7 +178,7 @@ try
                     Helpers.PrintDocLink("https://nimbbl.biz/docs/api-reference/create-an-address-v-3/", "Create Address API");
                     break;
                     
-                case "14":
+                case "16":
                     Console.ForegroundColor = ConsoleColor.White;
                     Console.WriteLine("Update Address");
                     Console.ResetColor();
@@ -186,7 +186,7 @@ try
                     Helpers.PrintDocLink("https://nimbbl.biz/docs/api-reference/update-an-address-v-3/", "Update Address API");
                     break;
                     
-                case "15":
+                case "17":
                     Console.ForegroundColor = ConsoleColor.White;
                     Console.WriteLine("Delete Address");
                     Console.ResetColor();
@@ -194,7 +194,7 @@ try
                     Helpers.PrintDocLink("https://nimbbl.biz/docs/api-reference/delete-an-address-v-3/", "Delete Address API");
                     break;
                     
-                case "16":
+                case "18":
                     Console.ForegroundColor = ConsoleColor.White;
                     Console.WriteLine("Import Addresses");
                     Console.ResetColor();
@@ -202,7 +202,7 @@ try
                     Helpers.PrintDocLink("https://nimbbl.biz/docs/api-reference/import-addresses-v-3/", "Import Addresses API");
                     break;
                     
-                case "17":
+                case "19":
                     Console.ForegroundColor = ConsoleColor.White;
                     Console.WriteLine("Check Address Eligibility");
                     Console.ResetColor();
@@ -210,7 +210,7 @@ try
                     Helpers.PrintDocLink("https://nimbbl.biz/docs/api-reference/check-address-eligibility-v-3/", "Check Address Eligibility API");
                     break;
                     
-                case "18":
+                case "20":
                     Console.ForegroundColor = ConsoleColor.White;
                     Console.WriteLine("Link Order to Address");
                     Console.ResetColor();
@@ -219,7 +219,7 @@ try
                     break;
                     
                 // Refunds API
-                case "19":
+                case "21":
                     Console.ForegroundColor = ConsoleColor.White;
                     Console.WriteLine("Initiate Refund");
                     Console.ResetColor();
@@ -228,7 +228,7 @@ try
                     break;
                     
                 // Transactions API
-                case "20":
+                case "22":
                     Console.ForegroundColor = ConsoleColor.White;
                     Console.WriteLine("Transaction Enquiry");
                     Console.ResetColor();
@@ -236,8 +236,8 @@ try
                     Helpers.PrintDocLink("https://nimbbl.biz/docs/api-reference/transaction-enquiry-v-3/", "Transaction Enquiry API");
                     break;
                     
-                // Checkout Utilities API - cases 21-29
-                case "21":
+                // Checkout Utilities API - cases 23-31
+                case "23":
                     Console.ForegroundColor = ConsoleColor.White;
                     Console.WriteLine("List Payment Modes");
                     Console.ResetColor();
@@ -245,7 +245,7 @@ try
                     Helpers.PrintDocLink("https://nimbbl.biz/docs/api-reference/list-of-payment-modes-v-3/", "List Payment Modes API");
                     break;
                     
-                case "22":
+                case "24":
                     Console.ForegroundColor = ConsoleColor.White;
                     Console.WriteLine("List Banks");
                     Console.ResetColor();
@@ -253,7 +253,7 @@ try
                     Helpers.PrintDocLink("https://nimbbl.biz/docs/api-reference/list-of-banks-v-3/", "List Banks API");
                     break;
                     
-                case "23":
+                case "25":
                     Console.ForegroundColor = ConsoleColor.White;
                     Console.WriteLine("List Wallets");
                     Console.ResetColor();
@@ -261,7 +261,7 @@ try
                     Helpers.PrintDocLink("https://nimbbl.biz/docs/api-reference/list-of-wallets-v-3/", "List Wallets API");
                     break;
                     
-                case "24":
+                case "26":
                     Console.ForegroundColor = ConsoleColor.White;
                     Console.WriteLine("List EMIs");
                     Console.ResetColor();
@@ -269,7 +269,7 @@ try
                     Helpers.PrintDocLink("https://nimbbl.biz/docs/api-reference/list-of-em-is-v-3/", "List EMIs API");
                     break;
                     
-                case "25":
+                case "27":
                     Console.ForegroundColor = ConsoleColor.White;
                     Console.WriteLine("Get Offers");
                     Console.ResetColor();
@@ -277,7 +277,7 @@ try
                     Helpers.PrintDocLink("https://nimbbl.biz/docs/api-reference/offers-v-3/", "Get Offers API");
                     break;
                     
-                case "26":
+                case "28":
                     Console.ForegroundColor = ConsoleColor.White;
                     Console.WriteLine("Get Card BIN Data");
                     Console.ResetColor();
@@ -285,7 +285,7 @@ try
                     Helpers.PrintDocLink("https://nimbbl.biz/docs/api-reference/get-card-bin-data-v-3/", "Get Card BIN Data API");
                     break;
                     
-                case "27":
+                case "29":
                     Console.ForegroundColor = ConsoleColor.White;
                     Console.WriteLine("Get Card Details");
                     Console.ResetColor();
@@ -293,7 +293,7 @@ try
                     Helpers.PrintDocLink("https://nimbbl.biz/docs/api-reference/get-card-details-v-3/", "Get Card Details API");
                     break;
                     
-                case "28":
+                case "30":
                     Console.ForegroundColor = ConsoleColor.White;
                     Console.WriteLine("Validate UPI VPA");
                     Console.ResetColor();
@@ -301,7 +301,7 @@ try
                     Helpers.PrintDocLink("https://nimbbl.biz/docs/api-reference/validate-upi-vpa-v-3/", "Validate UPI VPA API");
                     break;
                     
-                case "29":
+                case "31":
                     Console.ForegroundColor = ConsoleColor.White;
                     Console.WriteLine("Get UPI App Details");
                     Console.ResetColor();
@@ -309,38 +309,38 @@ try
                     break;
                     
                 // Webhooks
-                case "30":
+                case "32":
                     Console.ForegroundColor = ConsoleColor.White;
                     Console.WriteLine("Webhook Handling");
                     Console.ResetColor();
                     WebhookExamples.DisplayWebhookInfo();
-                    Helpers.PrintDocLink("https://nimbbl.biz/docs/standard-checkout/completing-integration/keeping-system-updated/", "Webhooks Documentation");
+                    Helpers.PrintDocLink("https://nimbbl.biz/docs/guides/integration/webhooks-and-transaction-enquiry/", "Webhooks Documentation");
                     break;
                     
                 // Examples
-                case "31":
+                case "33":
                     Console.ForegroundColor = ConsoleColor.White;
                     Console.WriteLine("Encryption Examples");
                     Console.ResetColor();
                     await EncryptionExamples.RunAllExamples(api);
-                    Helpers.PrintDocLink("https://nimbbl.biz/docs/guides/encrypt-decrypt-payload/", "Encryption/Decryption Guide");
+                    Helpers.PrintDocLink("https://nimbbl.biz/docs/guides/integration/encrypt-decrypt/", "Encryption/Decryption Guide");
             break;
 
                 // Pre-auth (capture / void)
-                case "32":
+                case "8":
                     Console.ForegroundColor = ConsoleColor.White;
                     Console.WriteLine("Capture (pre-auth)");
                     Console.ResetColor();
                     await PaymentExamples.CaptureExample(api);
-                    Helpers.PrintDocLink("https://nimbbl.biz/docs/api-reference/capture-a-payment-v-3/", "Capture Payment API");
+                    Helpers.PrintDocLink("https://nimbbl.biz/docs/api-reference/introduction/", "Capture Payment API");
                     break;
 
-                case "33":
+                case "9":
                     Console.ForegroundColor = ConsoleColor.White;
                     Console.WriteLine("Void (pre-auth)");
                     Console.ResetColor();
                     await PaymentExamples.VoidExample(api);
-                    Helpers.PrintDocLink("https://nimbbl.biz/docs/api-reference/void-a-payment-v-3/", "Void Payment API");
+                    Helpers.PrintDocLink("https://nimbbl.biz/docs/api-reference/introduction/", "Void Payment API");
                     break;
 
         default:
@@ -395,60 +395,60 @@ static void PrintMenu()
     Console.WriteLine("5.  Initiate Payment");
     Console.WriteLine("6.  Complete Payment");
     Console.WriteLine("7.  Resend OTP");
-    Console.WriteLine("32. Capture (pre-auth)");
-    Console.WriteLine("33. Void (pre-auth)\n");
-    
+    Console.WriteLine("8.  Capture (pre-auth)");
+    Console.WriteLine("9.  Void (pre-auth)\n");
+
     Console.ForegroundColor = ConsoleColor.Yellow;
     Console.WriteLine("=== Payment Links API ===");
     Console.ResetColor();
-    Console.WriteLine("8.  Create Payment Link");
-    Console.WriteLine("9.  Update Payment Link");
-    Console.WriteLine("10. Payment Link Enquiry");
-    Console.WriteLine("11. Payment Link Actions\n");
-    
+    Console.WriteLine("10. Create Payment Link");
+    Console.WriteLine("11. Update Payment Link");
+    Console.WriteLine("12. Payment Link Enquiry");
+    Console.WriteLine("13. Payment Link Actions\n");
+
     Console.ForegroundColor = ConsoleColor.Yellow;
     Console.WriteLine("=== Addresses API ===");
     Console.ResetColor();
-    Console.WriteLine("12. List Addresses");
-    Console.WriteLine("13. Create Address");
-    Console.WriteLine("14. Update Address");
-    Console.WriteLine("15. Delete Address");
-    Console.WriteLine("16. Import Addresses");
-    Console.WriteLine("17. Check Address Eligibility");
-    Console.WriteLine("18. Link Order to Address\n");
-    
+    Console.WriteLine("14. List Addresses");
+    Console.WriteLine("15. Create Address");
+    Console.WriteLine("16. Update Address");
+    Console.WriteLine("17. Delete Address");
+    Console.WriteLine("18. Import Addresses");
+    Console.WriteLine("19. Check Address Eligibility");
+    Console.WriteLine("20. Link Order to Address\n");
+
     Console.ForegroundColor = ConsoleColor.Yellow;
     Console.WriteLine("=== Refunds API ===");
     Console.ResetColor();
-    Console.WriteLine("19. Initiate Refund\n");
-    
+    Console.WriteLine("21. Initiate Refund\n");
+
     Console.ForegroundColor = ConsoleColor.Yellow;
     Console.WriteLine("=== Transactions API ===");
     Console.ResetColor();
-    Console.WriteLine("20. Transaction Enquiry\n");
-    
+    Console.WriteLine("22. Transaction Enquiry\n");
+
     Console.ForegroundColor = ConsoleColor.Yellow;
     Console.WriteLine("=== Checkout Utilities API ===");
     Console.ResetColor();
-    Console.WriteLine("21. List Payment Modes");
-    Console.WriteLine("22. List Banks");
-    Console.WriteLine("23. List Wallets");
-    Console.WriteLine("24. List EMIs");
-    Console.WriteLine("25. Get Offers");
-    Console.WriteLine("26. Get Card BIN Data");
-    Console.WriteLine("27. Get Card Details");
-    Console.WriteLine("28. Validate UPI VPA");
-    Console.WriteLine("29. Get UPI App Details\n");
-    
+    Console.WriteLine("23. List Payment Modes");
+    Console.WriteLine("24. List Banks");
+    Console.WriteLine("25. List Wallets");
+    Console.WriteLine("26. List EMIs");
+    Console.WriteLine("27. Get Offers");
+    Console.WriteLine("28. Get Card BIN Data");
+    Console.WriteLine("29. Get Card Details");
+    Console.WriteLine("30. Validate UPI VPA");
+    Console.WriteLine("31. Get UPI App Details\n");
+
     Console.ForegroundColor = ConsoleColor.Yellow;
     Console.WriteLine("=== Webhooks ===");
     Console.ResetColor();
-    Console.WriteLine("30. Webhook Handling\n");
-    
+    Console.WriteLine("32. Webhook Handling\n");
+
     Console.ForegroundColor = ConsoleColor.Yellow;
     Console.WriteLine("=== Examples ===");
     Console.ResetColor();
-    Console.WriteLine("31. Encryption Examples\n");
+    Console.WriteLine("33. Encryption Examples\n");
     
     Console.WriteLine("0.  Exit\n\n");
     Console.ForegroundColor = ConsoleColor.Cyan;

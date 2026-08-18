@@ -226,7 +226,23 @@ public class Logger
         var moduleName = !string.IsNullOrWhiteSpace(module) && module != "unknown" ? module : "unknown";
         var functionName = !string.IsNullOrWhiteSpace(function) ? function : "-";
         var lineNumber = line;
-        var contextPrefix = FormatContextFields(context);
+
+        // Always stamp APIVersion + APITag (parity with the PHP SDK, which prefixes every line).
+        // Explicit context values win; otherwise default APIVersion to the SDK's API version and
+        // APITag to the caller module (normalized to a component name in FormatContextFields).
+        var effectiveContext = new LogContext
+        {
+            ApiVersion = string.IsNullOrEmpty(context?.ApiVersion) ? ApiConstants.ApiVersion : context!.ApiVersion,
+            ApiTag = string.IsNullOrEmpty(context?.ApiTag) ? (moduleName != "unknown" ? moduleName : null) : context!.ApiTag,
+            Uri = context?.Uri,
+            StatusCode = context?.StatusCode,
+            SubMerchantId = context?.SubMerchantId,
+            OrderId = context?.OrderId,
+            InvoiceId = context?.InvoiceId,
+            TransactionId = context?.TransactionId,
+            EventType = context?.EventType,
+        };
+        var contextPrefix = FormatContextFields(effectiveContext);
         var logLine = $"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}][{SdkConstants.SdkName} {SdkConstants.SdkVersion}][{level}][{moduleName}:{lineNumber}][{functionName}]: {contextPrefix}{message}";
 
         if (!string.IsNullOrWhiteSpace(_logFilePath))

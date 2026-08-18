@@ -50,6 +50,8 @@ public static class JsonKeys
     public const string TransactionAmount = "transaction_amount";
     public const string TransactionCurrency = "transaction_currency";
     public const string Status = "status";
+    // v4 checkout callback carries its status here (minimal callback: checkout_status + reason)
+    public const string CheckoutStatus = "checkout_status";
     public const string Signature = "signature";
     public const string NimbblSignature = "nimbbl_signature";
     public const string SignatureVersion = "signature_version";
@@ -61,6 +63,9 @@ public static class JsonKeys
     public const string RefundStatus = "refund_status";
     public const string PaymentTransactionAmount = "payment_transaction_amount";
     public const string PaymentLinkHash = "payment_link_hash";
+    // Payment-link webhooks nest signed fields under a "payment_link" object; the hash is "hash".
+    public const string PaymentLink = "payment_link";
+    public const string Hash = "hash";
     public const string AmountPaid = "amount_paid";
     public const string PaymentLinkAmountPaid = "payment_link_amount_paid";
     public const string Currency = "currency";

@@ -25,22 +25,68 @@ public static class PaymentExamples
         
         var callbackUrl = Helpers.GetInput("Enter Callback URL (optional): ", false);
         
-        var paymentMode = Helpers.GetInput("Enter Payment Mode Code (net_banking/credit_card/etc): ", false) ?? "net_banking";
-        
+        var paymentMode = (Helpers.GetInput("Enter Payment Mode Code [net_banking|upi|wallet|credit_card|debit_card] (default net_banking): ", false)
+            ?? CheckoutConstants.PaymentModeNetBanking).ToLowerInvariant();
+
+        // Validate so we never send an invalid payment_mode_code (e.g. the hint text pasted verbatim).
+        var validModes = new[] { "net_banking", "upi", "wallet", "credit_card", "debit_card", "emi" };
+        if (Array.IndexOf(validModes, paymentMode) < 0)
+        {
+            Helpers.PrintError($"Invalid payment mode '{paymentMode}'. Valid options: {string.Join(", ", validModes)}.\n");
+            return;
+        }
+
         var data = new Dictionary<string, object?>
         {
             ["order_id"] = orderId,
             [CheckoutConstants.OptionKeyPaymentModeCode] = paymentMode,
             ["callback_url"] = callbackUrl
         };
-        
+
         // Payment mode specific data
-        switch (paymentMode.ToLower())
+        switch (paymentMode)
         {
             case "net_banking":
                 Helpers.PrintInfo("Bank Code is required for net_banking payment mode.\n");
-                var bankCode = Helpers.GetInput("Enter Bank Code (default: HDFC): ", false) ?? "HDFC";
-                data[CheckoutConstants.OptionKeyBankCode] = bankCode;
+
+                // bank_code must be a valid code for THIS order — fetch the list rather than guessing.
+                var validBankCodes = new List<string>();
+                try
+                {
+                    var banks = await api.CheckoutUtilities().ListBanksAsync(new Dictionary<string, object?> { ["order_id"] = orderId });
+                    if (banks.TryGetProperty("bank_list", out var bankList) && bankList.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var bank in bankList.EnumerateArray())
+                        {
+                            var c = bank.TryGetProperty("code", out var codeProp) && codeProp.ValueKind == JsonValueKind.String ? codeProp.GetString() : null;
+                            if (!string.IsNullOrWhiteSpace(c)) validBankCodes.Add(c!);
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Helpers.PrintError($"Could not fetch bank list: {ex.Message}\n");
+                    return;
+                }
+
+                if (validBankCodes.Count == 0)
+                {
+                    Helpers.PrintError("No banks available for this order.\n");
+                    return;
+                }
+
+                Helpers.PrintInfo($"Available bank codes: {string.Join(", ", validBankCodes)}\n");
+                var defaultBank = validBankCodes[0];
+                var bankCodeInput = Helpers.GetInput($"Enter Bank Code (default: {defaultBank}): ", false) ?? defaultBank;
+
+                // Validate (case-insensitive) and normalize to the exact code from the list.
+                var matchedBank = validBankCodes.FirstOrDefault(c => string.Equals(c, bankCodeInput, StringComparison.OrdinalIgnoreCase));
+                if (matchedBank == null)
+                {
+                    Helpers.PrintError($"Invalid bank code '{bankCodeInput}'. Valid options: {string.Join(", ", validBankCodes)}.\n");
+                    return;
+                }
+                data[CheckoutConstants.OptionKeyBankCode] = matchedBank;
                 break;
             case "upi":
                 var paymentFlow = Helpers.GetInput("Enter UPI Payment Flow (intent/collect): ", false) ?? "intent";
@@ -221,7 +267,7 @@ public static class PaymentExamples
     /// customer completes a pre-auth payment the transaction is 'authorized' — then CAPTURE
     /// collects the held funds. A 'pending' status is normal; confirm via the capture_success
     /// webhook or the Transaction Enquiry API. Never fulfil an order on 'authorized' alone.
-    /// See https://nimbbl.biz/docs/api-reference/capture-a-payment-v-3/
+    /// See https://nimbbl.biz/docs/api-reference/introduction/
     /// </summary>
     public static async Task CaptureExample(NimbblApi api)
     {
@@ -270,7 +316,7 @@ public static class PaymentExamples
     ///
     /// Acts on a transaction in the 'authorized' status only. A 'pending' status is normal;
     /// confirm via the void_success webhook or the Transaction Enquiry API.
-    /// See https://nimbbl.biz/docs/api-reference/void-a-payment-v-3/
+    /// See https://nimbbl.biz/docs/api-reference/introduction/
     /// </summary>
     public static async Task VoidExample(NimbblApi api)
     {

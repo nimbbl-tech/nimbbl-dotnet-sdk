@@ -19,7 +19,7 @@ public static class EncryptionExamples
                 
         Console.WriteLine("For more information:\n");
         Console.WriteLine("  - Standard Checkout Integration: https://nimbbl.biz/docs/standard-checkout/completing-integration/\n");
-        Console.WriteLine("  - Encryption/Decryption Guide: https://nimbbl.biz/docs/guides/encrypt-decrypt-payload/\n");
+        Console.WriteLine("  - Encryption/Decryption Guide: https://nimbbl.biz/docs/guides/integration/encrypt-decrypt/\n");
         Console.WriteLine("\nThe Encryption class provides:\n");
         Console.WriteLine("  - AES-GCM encryption/decryption\n");
         Console.WriteLine("  - Hex-encoded output\n");

@@ -353,4 +353,40 @@ public class SignatureVerifierTest
         var res = SignatureVerifier.VerifyWebhook("", Secret);
         Assert.False(res.Success);
     }
+
+    [Fact]
+    public void ShouldVerifyLegacyPaymentLinkWebhookWithNestedPaymentLink()
+    {
+        // Legacy (v3) payment-link webhook nests the signed fields under "payment_link" (hash as "hash").
+        const string invoiceId = "INV-f92ade2b";
+        const string plStatus = "sent";
+        const string currency = "INR";
+        const string amountStr = "0.00";
+        const string hash = "J49PjM8G9EO05XXo";
+        var sig = Hmac($"{invoiceId}|{plStatus}|{currency}|{amountStr}|{hash}", Secret);
+
+        var body = Json(new Dictionary<string, object?>
+        {
+            ["event_type"] = "payment_link_sent",
+            ["status"] = plStatus,
+            ["message"] = "Payment link sent",
+            ["payment_link"] = new Dictionary<string, object?>
+            {
+                ["status"] = plStatus,
+                ["currency"] = currency,
+                ["amount_paid"] = 0.0,
+                ["hash"] = hash,
+                ["invoice_id"] = invoiceId,
+                ["signature"] = sig,
+            },
+            ["is_webhook"] = true,
+            ["version"] = "v3",
+        });
+
+        var res = SignatureVerifier.VerifyWebhook(body, Secret);
+
+        Assert.True(res.Success, res.Message);
+        Assert.Equal("payment_link_sent", res.EventType);
+        Assert.Equal("v3", res.Version);
+    }
 }

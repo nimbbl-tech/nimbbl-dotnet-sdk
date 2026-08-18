@@ -142,15 +142,28 @@ public static class SignatureVerifier
 
         var signatureVersion = JsonUtils.TryGetString(attributes, JsonKeys.SignatureVersion) ?? SdkConstants.SignatureVersionV3;
 
-        // signature fallback chain: nimbbl_signature, signature
-        var signature = JsonUtils.TryGetString(attributes, JsonKeys.NimbblSignature)
-            ?? JsonUtils.TryGetString(attributes, JsonKeys.Signature);
+        // Legacy (v3) payment-link webhooks nest the signed fields under a "payment_link" object
+        // (and name the hash "hash"). Read them from the nested object when absent at the top level.
+        var pl = attributes.ValueKind == JsonValueKind.Object
+                 && attributes.TryGetProperty(JsonKeys.PaymentLink, out var plProp)
+                 && plProp.ValueKind == JsonValueKind.Object
+            ? plProp
+            : default;
 
-        var invoiceId = JsonUtils.TryGetString(attributes, JsonKeys.InvoiceId);
-        var status = JsonUtils.TryGetString(attributes, JsonKeys.Status);
-        var currency = JsonUtils.TryGetString(attributes, JsonKeys.Currency);
-        var amountPaid = JsonUtils.TryGetDouble(attributes, JsonKeys.AmountPaid) ?? JsonUtils.TryGetDouble(attributes, JsonKeys.PaymentLinkAmountPaid) ?? 0.0;
-        var paymentLinkHash = JsonUtils.TryGetString(attributes, JsonKeys.PaymentLinkHash);
+        // signature fallback chain: nimbbl_signature, signature (top level, then nested payment_link)
+        var signature = JsonUtils.TryGetString(attributes, JsonKeys.NimbblSignature)
+            ?? JsonUtils.TryGetString(attributes, JsonKeys.Signature)
+            ?? JsonUtils.TryGetString(pl, JsonKeys.NimbblSignature)
+            ?? JsonUtils.TryGetString(pl, JsonKeys.Signature);
+
+        var invoiceId = JsonUtils.TryGetString(attributes, JsonKeys.InvoiceId) ?? JsonUtils.TryGetString(pl, JsonKeys.InvoiceId);
+        var status = JsonUtils.TryGetString(attributes, JsonKeys.Status) ?? JsonUtils.TryGetString(pl, JsonKeys.Status);
+        var currency = JsonUtils.TryGetString(attributes, JsonKeys.Currency) ?? JsonUtils.TryGetString(pl, JsonKeys.Currency);
+        var amountPaid = JsonUtils.TryGetDouble(attributes, JsonKeys.AmountPaid) ?? JsonUtils.TryGetDouble(attributes, JsonKeys.PaymentLinkAmountPaid)
+            ?? JsonUtils.TryGetDouble(pl, JsonKeys.AmountPaid) ?? JsonUtils.TryGetDouble(pl, JsonKeys.PaymentLinkAmountPaid) ?? 0.0;
+        var paymentLinkHash = JsonUtils.TryGetString(attributes, JsonKeys.PaymentLinkHash)
+            ?? JsonUtils.TryGetString(pl, JsonKeys.PaymentLinkHash)
+            ?? JsonUtils.TryGetString(pl, JsonKeys.Hash);
 
         var missing = new List<string>();
         if (string.IsNullOrEmpty(invoiceId)) missing.Add(JsonKeys.InvoiceId);

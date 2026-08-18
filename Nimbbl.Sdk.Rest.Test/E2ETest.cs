@@ -92,12 +92,12 @@ public class E2ETest
         // Transaction enquiry (a brand-new order may have no transaction; assert the call returns an object)
         try
         {
-            var enq = await api.CheckoutUtilities().ValidateUpiVpaAsync(new Dictionary<string, object?> { ["order_id"] = orderId, ["vpa"] = "test@upi" });
+            var enq = await api.Transactions().TransactionEnquiryAsync(new Dictionary<string, object?> { ["order_id"] = orderId });
             Assert.True(enq.ValueKind == JsonValueKind.Object);
         }
         catch (System.Exception ex)
         {
-            SkipNote($"UPI validate not applicable: {ex.Message}");
+            SkipNote($"Transaction enquiry not applicable for a new order: {ex.Message}");
         }
     }
 
