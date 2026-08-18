@@ -119,4 +119,12 @@ git push origin "v$VERSION"
 
 echo ""
 echo "Published Nimbbl.Sdk.Rest $VERSION and pushed tag v$VERSION."
-echo "Prerelease consumers install with: dotnet add package Nimbbl.Sdk.Rest --prerelease"
+if [[ "$VERSION" == *-* ]]; then
+  # Prerelease (has a -suffix): consumers must opt in.
+  echo "Prerelease consumers install with: dotnet add package Nimbbl.Sdk.Rest --version $VERSION"
+  echo "  (or the latest prerelease: dotnet add package Nimbbl.Sdk.Rest --prerelease)"
+else
+  # Stable release: it becomes the default (highest stable) version.
+  echo "Consumers install with: dotnet add package Nimbbl.Sdk.Rest"
+  echo "  (or pin this version: dotnet add package Nimbbl.Sdk.Rest --version $VERSION)"
+fi
