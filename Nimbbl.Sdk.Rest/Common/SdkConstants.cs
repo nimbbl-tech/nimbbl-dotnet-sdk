@@ -27,7 +27,7 @@ public static class SdkConstants
     
     /// <summary>
     /// Removes git commit hash from version string (everything after '+' sign)
-    /// Example: "1.3.5-rc6+02033c7b..." becomes "1.3.5-rc6"
+    /// Example: "1.4.0-alpha.1+02033c7b..." becomes "1.4.0-alpha.1"
     /// </summary>
     private static string GetCleanVersion(string version)
     {
