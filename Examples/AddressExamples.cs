@@ -9,13 +9,24 @@ namespace Examples;
 /// </summary>
 public static class AddressExamples
 {
+    // Defaults for list-addresses query params (amount + currency identify the order for shipping calc).
+    private const decimal DefaultAmount = 1m;
+    private const string DefaultCurrency = "INR";
+
     private static async Task<JsonElement?> FindAddressByIdAsync(
         NimbblApi api,
         string addressId,
         string userId)
     {
+        // list-addresses needs user_id + amount + currency together (merchant-token flow),
+        // otherwise the API returns REQUIRED_INFORMATION_MISSING. Use defaults for the lookup.
         var list = await api.Addresses().ListAddressesAsync(
-            new Dictionary<string, object?> { ["user_id"] = userId });
+            new Dictionary<string, object?>
+            {
+                ["user_id"] = userId,
+                ["amount"] = DefaultAmount,
+                ["currency"] = DefaultCurrency,
+            });
 
         // List can be:
         // - { "addresses": [ { "address": { ... }, ... }, ... ] }   (documented)
@@ -99,47 +110,42 @@ public static class AddressExamples
         Helpers.PrintStep(7, "Link Address with Order");
         await LinkAddressWithOrderExample(api);
         
-        Console.WriteLine("\nFor more information, see: https://nimbbl.biz/docs/category/api-reference/addresses/\n");
+        Console.WriteLine("\nFor more information, see: https://nimbbl.biz/docs/api-reference/introduction/\n");
     }
 
     public static async Task ListAddressesExample(NimbblApi api)
     {
         try
         {
-            // Merchant token is automatically generated and used for authentication
-            Dictionary<string, object?> data = [];
-            
-            // user_id - required for listing addresses
-            var userId = Helpers.GetInput("Enter User ID: ", false);
-            if (!string.IsNullOrWhiteSpace(userId))
+            // Merchant token is automatically generated and used for authentication.
+            // With a merchant token the list-addresses endpoint needs user_id + amount + currency
+            // together (amount + currency drive the shipping/eligibility calculation); omitting them
+            // returns REQUIRED_INFORMATION_MISSING. So we send all three, applying defaults when the
+            // input is left blank.
+            var userId = Helpers.GetInput("Enter User ID: ");
+            if (string.IsNullOrWhiteSpace(userId))
             {
-                data["user_id"] = userId;
+                Helpers.PrintError("User ID is required.\n");
+                return;
             }
-            
-            // amount - order amount to calculate shipping charges
-            var amountStr = Helpers.GetInput("Enter Order Amount (for shipping calculation, optional): ", false);
-            if (!string.IsNullOrWhiteSpace(amountStr) && decimal.TryParse(amountStr, out var amount))
+
+            // amount - defaults to 1 when not provided
+            var amountStr = Helpers.GetInput($"Enter Order Amount for shipping calc (default: {DefaultAmount}): ", false);
+            var amount = !string.IsNullOrWhiteSpace(amountStr) && decimal.TryParse(amountStr, out var parsedAmount)
+                ? parsedAmount
+                : DefaultAmount;
+
+            // currency - defaults to INR when not provided
+            var currencyInput = Helpers.GetInput($"Enter Currency in ISO-4217 (default: {DefaultCurrency}): ", false);
+            var currency = string.IsNullOrWhiteSpace(currencyInput) ? DefaultCurrency : currencyInput.ToUpperInvariant();
+
+            var data = new Dictionary<string, object?>
             {
-                data["amount"] = amount;
-            }
-            
-            // currency - currency code in ISO-4217 format
-            var currency = Helpers.GetInput("Enter Currency (ISO-4217 format, e.g., INR, optional): ", false);
-            if (!string.IsNullOrWhiteSpace(currency))
-            {
-                data["currency"] = currency.ToUpper();
-            }
-            
-            if (data.Count == 0)
-            {
-                Helpers.PrintWarning("No query parameters provided. At least one parameter (user_id, amount, currency) is recommended.\n");
-                var continueChoice = Helpers.GetInput("Continue anyway? (y/n): ", false);
-                if (continueChoice?.ToLower() != "y")
-                {
-                    return;
-                }
-            }
-            
+                ["user_id"] = userId,
+                ["amount"] = amount,
+                ["currency"] = currency,
+            };
+
             var result = await api.Addresses().ListAddressesAsync(data);
             
             if (result.ValueKind == JsonValueKind.Object && result.TryGetProperty("error", out var errorProp))

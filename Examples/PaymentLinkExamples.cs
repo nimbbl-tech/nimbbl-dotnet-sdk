@@ -32,7 +32,7 @@ public static class PaymentLinkExamples
         Helpers.PrintStep(4, "Payment Link Actions");
         await PerformPaymentLinkActionsExample(api);
         
-        Console.WriteLine("\nFor more information, see: https://nimbbl.biz/docs/category/api-reference/payment-link/\n");
+        Console.WriteLine("\nFor more information, see: https://nimbbl.biz/docs/api-reference/introduction/\n");
     }
 
     public static async Task CreatePaymentLinkExample(NimbblApi api)

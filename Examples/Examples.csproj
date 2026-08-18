@@ -7,16 +7,15 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
-  <!-- Use published SDK from NuGet (default) -->
-  <ItemGroup>
-    <PackageReference Include="Nimbbl.Sdk.Rest" Version="1.3.5" />
-  </ItemGroup>
-    
-
-  <!-- Use local SDK source (uncomment to use local SDK instead of published package) -->
-  <!--
+  <!-- Use local SDK source (default within this repo — always matches the code being developed) -->
   <ItemGroup>
     <ProjectReference Include="..\Nimbbl.Sdk.Rest\Nimbbl.Sdk.Rest.csproj" />
+  </ItemGroup>
+
+  <!-- Use published SDK from NuGet (uncomment to build against the released package instead) -->
+  <!--
+  <ItemGroup>
+    <PackageReference Include="Nimbbl.Sdk.Rest" Version="1.4.0" />
   </ItemGroup>
     -->
 

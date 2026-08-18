@@ -338,7 +338,7 @@ Nimbbl.Sdk.Rest/
 
 ## Version
 
-Current Version: 1.3.5
+Current Version: 1.4.0
 
 ## License
 

@@ -14,6 +14,7 @@ public class Logger
     private const string LogLevelError = "ERROR";
     private const string LogLevelDebug = "DEBUG";
     private const string LogLevelWarning = "WARNING";
+    private const string LogLevelCritical = "CRITICAL";
     private const string LogLevelException = "EXCEPTION";
 
     private static Logger? _instance;
@@ -156,57 +157,67 @@ public class Logger
     public static bool IsDebugEnabled() => _enableDebugLogging;
 
     /// <summary>
-    /// Log INFO with optional caller info (always printed, debug logging is controlled separately)
+    /// Log INFO with optional caller info and structured context (always printed, debug logging is controlled separately)
     /// </summary>
-    public void InfoWithCaller(string message, (string Module, string Function, int Line)? callerInfo = null)
+    public void InfoWithCaller(string message, (string Module, string Function, int Line)? callerInfo = null, LogContext? context = null)
     {
         var (module, function, line) = callerInfo ?? GetCaller();
         var formattedMessage = FormatMessage(message, null);
-        Write(LogLevelInfo, formattedMessage, module, line, function);
+        Write(LogLevelInfo, formattedMessage, module, line, function, context);
     }
-    
+
     /// <summary>
-    /// Log ERROR with optional caller info (always printed, regardless of logging settings)
+    /// Log ERROR with optional caller info and structured context (always printed, regardless of logging settings)
     /// </summary>
-    public void ErrorWithCaller(string message, (string Module, string Function, int Line)? callerInfo = null)
+    public void ErrorWithCaller(string message, (string Module, string Function, int Line)? callerInfo = null, LogContext? context = null)
     {
         var (module, function, line) = callerInfo ?? GetCaller();
         var formattedMessage = FormatMessage(message, null);
-        Write(LogLevelError, formattedMessage, module, line, function);
+        Write(LogLevelError, formattedMessage, module, line, function, context);
     }
-    
+
     /// <summary>
-    /// Log DEBUG with optional caller info (only printed when debug logging is enabled)
+    /// Log DEBUG with optional caller info and structured context (only printed when debug logging is enabled)
     /// </summary>
-    public void DebugWithCaller(string message, (string Module, string Function, int Line)? callerInfo = null)
+    public void DebugWithCaller(string message, (string Module, string Function, int Line)? callerInfo = null, LogContext? context = null)
     {
         if (!_enableDebugLogging) return;
         var (module, function, line) = callerInfo ?? GetCaller();
         var formattedMessage = FormatMessage(message, null);
-        Write(LogLevelDebug, formattedMessage, module, line, function);
+        Write(LogLevelDebug, formattedMessage, module, line, function, context);
     }
-    
+
     /// <summary>
-    /// Log WARNING with optional caller info (always printed, regardless of logging settings)
+    /// Log WARNING with optional caller info and structured context (always printed, regardless of logging settings)
     /// </summary>
-    public void WarningWithCaller(string message, (string Module, string Function, int Line)? callerInfo = null)
+    public void WarningWithCaller(string message, (string Module, string Function, int Line)? callerInfo = null, LogContext? context = null)
     {
         var (module, function, line) = callerInfo ?? GetCaller();
         var formattedMessage = FormatMessage(message, null);
-        Write(LogLevelWarning, formattedMessage, module, line, function);
+        Write(LogLevelWarning, formattedMessage, module, line, function, context);
     }
-    
+
     /// <summary>
-    /// Log EXCEPTION with optional caller info (always printed, regardless of logging settings)
+    /// Log CRITICAL with optional caller info and structured context (always printed, regardless of logging settings)
     /// </summary>
-    public void ExceptionWithCaller(string message, System.Exception ex, (string Module, string Function, int Line)? callerInfo = null)
+    public void CriticalWithCaller(string message, (string Module, string Function, int Line)? callerInfo = null, LogContext? context = null)
+    {
+        var (module, function, line) = callerInfo ?? GetCaller();
+        var formattedMessage = FormatMessage(message, null);
+        Write(LogLevelCritical, formattedMessage, module, line, function, context);
+    }
+
+    /// <summary>
+    /// Log EXCEPTION with optional caller info and structured context (always printed, regardless of logging settings)
+    /// </summary>
+    public void ExceptionWithCaller(string message, System.Exception ex, (string Module, string Function, int Line)? callerInfo = null, LogContext? context = null)
     {
         var (module, function, line) = callerInfo ?? GetCaller();
         var formattedMessage = FormatMessage(message, ex);
-        Write(LogLevelException, formattedMessage, module, line, function);
+        Write(LogLevelException, formattedMessage, module, line, function, context);
     }
 
-    private void Write(string level, string message, string module, int line, string function)
+    private void Write(string level, string message, string module, int line, string function, LogContext? context = null)
     {
         // Debug logging check (only DEBUG logs are gated)
         if (level.Equals(LogLevelDebug, StringComparison.OrdinalIgnoreCase) && !_enableDebugLogging) return;
@@ -215,7 +226,24 @@ public class Logger
         var moduleName = !string.IsNullOrWhiteSpace(module) && module != "unknown" ? module : "unknown";
         var functionName = !string.IsNullOrWhiteSpace(function) ? function : "-";
         var lineNumber = line;
-        var logLine = $"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}][{SdkConstants.SdkName} {SdkConstants.SdkVersion}][{level}][{moduleName}:{lineNumber}][{functionName}]: {message}";
+
+        // Always stamp APIVersion + APITag (parity with the PHP SDK, which prefixes every line).
+        // Explicit context values win; otherwise default APIVersion to the SDK's API version and
+        // APITag to the caller module (normalized to a component name in FormatContextFields).
+        var effectiveContext = new LogContext
+        {
+            ApiVersion = string.IsNullOrEmpty(context?.ApiVersion) ? ApiConstants.ApiVersion : context!.ApiVersion,
+            ApiTag = string.IsNullOrEmpty(context?.ApiTag) ? (moduleName != "unknown" ? moduleName : null) : context!.ApiTag,
+            Uri = context?.Uri,
+            StatusCode = context?.StatusCode,
+            SubMerchantId = context?.SubMerchantId,
+            OrderId = context?.OrderId,
+            InvoiceId = context?.InvoiceId,
+            TransactionId = context?.TransactionId,
+            EventType = context?.EventType,
+        };
+        var contextPrefix = FormatContextFields(effectiveContext);
+        var logLine = $"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}][{SdkConstants.SdkName} {SdkConstants.SdkVersion}][{level}][{moduleName}:{lineNumber}][{functionName}]: {contextPrefix}{message}";
 
         if (!string.IsNullOrWhiteSpace(_logFilePath))
         {
@@ -253,6 +281,50 @@ public class Logger
         Console.WriteLine(logLine);
     }
     
+    /// <summary>
+    /// Renders the structured context prefix, mirroring the PHP SDK's formatContextFields():
+    /// only non-empty fields are included, in a fixed order, with a trailing space.
+    /// Returns an empty string when there is no context.
+    /// </summary>
+    private static string FormatContextFields(LogContext? c)
+    {
+        if (c == null) return string.Empty;
+
+        var parts = new List<string>();
+        void Add(string label, string? value)
+        {
+            if (!string.IsNullOrEmpty(value)) parts.Add($"[{label}:{value}]");
+        }
+
+        Add("APIVersion", c.ApiVersion);
+        Add("APITag", NormalizeApiTag(c.ApiTag));
+        Add("URI", c.Uri);
+        Add("StatusCode", c.StatusCode);
+        Add("SubMerchantID", c.SubMerchantId);
+        Add("OrderID", c.OrderId);
+        Add("InvoiceID", c.InvoiceId);
+        Add("TransactionID", c.TransactionId);
+        Add("EventType", c.EventType);
+
+        return parts.Count == 0 ? string.Empty : string.Join(" ", parts) + " ";
+    }
+
+    /// <summary>
+    /// Normalizes an apiTag: converts a filename-style tag (e.g. "Order.cs" / "Order.php")
+    /// to a component name (e.g. "Order"), mirroring the PHP SDK's apiTag normalization.
+    /// </summary>
+    private static string? NormalizeApiTag(string? apiTag)
+    {
+        if (string.IsNullOrEmpty(apiTag)) return apiTag;
+        if (apiTag.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) ||
+            apiTag.EndsWith(".php", StringComparison.OrdinalIgnoreCase))
+        {
+            var dot = apiTag.LastIndexOf('.');
+            if (dot > 0) return apiTag.Substring(0, dot);
+        }
+        return apiTag;
+    }
+
     private static string FormatMessage(string message, System.Exception? exception)
     {
         if (exception != null)

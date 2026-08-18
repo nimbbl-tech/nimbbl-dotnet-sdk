@@ -30,6 +30,10 @@ internal static class ApiConstants
     public const string PaymentComplete = $"{ApiVersion}/payment";
     public const string PaymentResendOtp = $"{ApiVersion}/resend-otp";
 
+    // Pre-auth actions (capture / void)
+    public const string Capture = $"{ApiVersion}/capture";
+    public const string Void = $"{ApiVersion}/void";
+
     // Payment Links
     public const string PaymentLinkCreate = PaymentLinkBase;
     public const string PaymentLinkUpdate = PaymentLinkBase;

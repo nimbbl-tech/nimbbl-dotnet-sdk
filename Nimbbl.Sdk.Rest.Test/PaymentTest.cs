@@ -82,6 +82,38 @@ public class PaymentTest : TestBase
         Assert.NotNull(exception);
     }
 
+    [Fact]
+    public async Task ShouldCapturePreAuthorizedPayment()
+    {
+        var request = new Dictionary<string, object?>
+        {
+            ["transaction_id"] = "test_transaction_id",
+            ["comment"] = "Goods dispatched"
+        };
+
+        // Invalid transaction_id against the real API surfaces a NimbblException;
+        // this exercises the Capture method signature, routing, and error handling.
+        var exception = await Assert.ThrowsAnyAsync<NimbblException>(() =>
+            Api.Payments().CaptureAsync(request));
+        Assert.NotNull(exception);
+    }
+
+    [Fact]
+    public async Task ShouldVoidPreAuthorizedPayment()
+    {
+        var request = new Dictionary<string, object?>
+        {
+            ["transaction_id"] = "test_transaction_id",
+            ["comment"] = "Customer cancelled"
+        };
+
+        // Invalid transaction_id against the real API surfaces a NimbblException;
+        // this exercises the Void method signature, routing, and error handling.
+        var exception = await Assert.ThrowsAnyAsync<NimbblException>(() =>
+            Api.Payments().VoidAsync(request));
+        Assert.NotNull(exception);
+    }
+
     private static Dictionary<string, object?> CreateTestOrderRequest()
     {
         return new Dictionary<string, object?>

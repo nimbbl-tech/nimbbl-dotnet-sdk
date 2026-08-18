@@ -171,7 +171,7 @@ public class CheckoutUtilities : BaseService
     /// </summary>
     /// <param name="request">Request parameters</param>
     /// <returns>JSON response containing UPI app details</returns>
-    /// <remarks>See <see href="https://nimbbl.biz/docs/api-reference/get-upi-app-details-v-3/">Get UPI App Details API</see> for more details.</remarks>
+    /// <remarks>See <see href="https://nimbbl.biz/docs/api-reference/introduction/">Get UPI App Details API</see> for more details.</remarks>
     public Task<JsonElement> GetUpiAppDetailsAsync(Dictionary<string, object?> request)
     {
         return ApiClient.Post<Dictionary<string, object?>, JsonElement>(ApiConstants.CheckoutGetUpiAppDetails, request);

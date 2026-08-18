@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using Nimbbl.Sdk.Rest.Common;
 using Nimbbl.Sdk.Rest.Log;
@@ -44,7 +45,8 @@ internal class ApiClient : IDisposable
     /// </summary>
     internal bool IsEncryptPayloadEnabled() => _encryptPayload;
     
-    public ApiClient(string key, string secret, string baseUrl, bool encryptPayload = false)
+    // handler: optional HttpMessageHandler for tests (mock/stub the transport). Null uses a real HttpClient.
+    public ApiClient(string key, string secret, string baseUrl, bool encryptPayload = false, HttpMessageHandler? handler = null)
     {
         _key = key;
         _secret = secret;
@@ -57,15 +59,16 @@ internal class ApiClient : IDisposable
         {
             AllowTrailingCommas = true,
             PropertyNamingPolicy = new SnakeCaseNamingPolicy(),
+            // Keep '+', '/', and unicode unescaped in request bodies (parity with PHP; also makes
+            // the raw request log match the masked log). Valid JSON — servers parse it identically.
+            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
             // Don't auto-convert strings to DateTime - let properties handle their own types
             NumberHandling = System.Text.Json.Serialization.JsonNumberHandling.AllowReadingFromString,
             DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
         };
-        _client = new()
-        {
-            BaseAddress = new(baseUrl),
-            Timeout = TimeSpan.FromSeconds(ApiConstants.DefaultHttpTimeoutSeconds)
-        };
+        _client = handler != null ? new HttpClient(handler) : new HttpClient();
+        _client.BaseAddress = new(baseUrl);
+        _client.Timeout = TimeSpan.FromSeconds(ApiConstants.DefaultHttpTimeoutSeconds);
         // Default User-Agent: SDK name/version + runtime
         _defaultHeaders["User-Agent"] = $"{SdkConstants.SdkName}/{SdkConstants.SdkVersion} .NET/{Environment.Version}";
     }
@@ -803,6 +806,47 @@ internal class ApiClient : IDisposable
     }
 
     /// <summary>
+    /// Extracts an order id for the structured log context (parity with the PHP SDK request/response logs).
+    /// Looks in the JSON body (order_id | nimbbl_order_id | order.order_id) and falls back to the
+    /// URI query string (?order_id=...). Returns null when none is present.
+    /// </summary>
+    private static string? ExtractOrderId(string? json, string? uri)
+    {
+        if (!string.IsNullOrWhiteSpace(json))
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(json);
+                var root = doc.RootElement;
+                if (root.ValueKind == JsonValueKind.Object)
+                {
+                    var orderId = JsonUtils.TryGetString(root, JsonKeys.OrderId)
+                        ?? JsonUtils.TryGetString(root, JsonKeys.NimbblOrderId);
+                    if (string.IsNullOrEmpty(orderId)
+                        && root.TryGetProperty(JsonKeys.Order, out var order)
+                        && order.ValueKind == JsonValueKind.Object)
+                    {
+                        orderId = JsonUtils.TryGetString(order, JsonKeys.OrderId);
+                    }
+                    if (!string.IsNullOrEmpty(orderId)) return orderId;
+                }
+            }
+            catch (JsonException)
+            {
+                // not JSON — fall through to URI
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(uri))
+        {
+            var match = System.Text.RegularExpressions.Regex.Match(uri, @"[?&]order_id=([^&]+)");
+            if (match.Success) return Uri.UnescapeDataString(match.Groups[1].Value);
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// Creates an HTTP request message without a body
     /// </summary>
     private HttpRequestMessage CreateRequest(HttpMethod method, string requestUri)
@@ -937,9 +981,16 @@ internal class ApiClient : IDisposable
                 request.Content = new StringContent(requestBody, System.Text.Encoding.UTF8, "application/json");
             }
             
-            // Use Logger.InfoWithCaller for logging with caller info
-            _logger.InfoWithCaller(logMessage, callerInfo);
-            
+            // Use Logger.InfoWithCaller for logging with caller info + structured HTTP context
+            var requestContext = new LogContext
+            {
+                ApiVersion = ApiConstants.ApiVersion,
+                ApiTag = callerInfo.Module,
+                Uri = uri,
+                OrderId = ExtractOrderId(requestBody, uri)
+            };
+            _logger.InfoWithCaller(logMessage, callerInfo, requestContext);
+
             // Log raw request body for debugging (unmasked)
             if (requestBody != null)
             {
@@ -978,11 +1029,10 @@ internal class ApiClient : IDisposable
             
             var logger = Logger.GetInstance();
             var statusCode = (int)response.StatusCode;
-            var statusText = response.StatusCode.ToString();
             var uri = response.RequestMessage?.RequestUri?.ToString() ?? "unknown";
-            
-            // Build log message
-            var logMessage = $"{statusCode} {statusText} for {uri}";
+
+            // Short message; status and URI are carried in the structured context ([StatusCode], [URI]).
+            var logMessage = "Response received";
             
             // Log response headers (masked for security)
             var headersToLog = CentralMasker.MaskHeaders(response.Headers, response.Content?.Headers);
@@ -1009,8 +1059,16 @@ internal class ApiClient : IDisposable
                 logMessage += $"\nResponse Body: {bodyToLog}";
             }
             
-            // Use Logger.Info with caller info from request log (or get fresh if not provided)
-            logger.InfoWithCaller(logMessage, callerInfo);
+            // Use Logger.Info with caller info from request log (or get fresh if not provided) + structured HTTP context
+            var responseContext = new LogContext
+            {
+                ApiVersion = ApiConstants.ApiVersion,
+                ApiTag = callerInfo?.Module,
+                Uri = uri,
+                StatusCode = statusCode.ToString(),
+                OrderId = ExtractOrderId(responseBody, uri)
+            };
+            logger.InfoWithCaller(logMessage, callerInfo, responseContext);
             
             // Log raw response body for debugging (unmasked)
             var rawBody = responseBody ?? (response.Content != null ? await response.Content.ReadAsStringAsync() : null);
